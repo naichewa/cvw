@@ -152,12 +152,26 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
     logic TransmitFIFOReadEmptyDelay;
     logic SCLKenableEarly;                          // SCLKenable 1 PCLK cycle early, needed for on time register changes when ChipSelectMode is hold and Delay1[15:8] (InterXFR delay) is 0
 
+    //Hardware Interlock 
+    logic [11:0] SckDivLock;
+    logic [1:0]  SckModeLock;
+    logic [1:0]  ChipSelectIDLock;
+    logic [3:0]  ChipSelectDefLock; 
+    logic [1:0]  ChipSelectModeLock;
+    logic [15:0] Delay0Lock, Delay1Lock;
+    logic [4:0]  FormatLock;
+    logic [7:0]  ReceiveDataLock;
+    logic [2:0]  TransmitWatermarkLock, ReceiveWatermarkLock;
+    logic [1:0]  InterruptEnableLock, InterruptPendingLock;
+
+
 
 
     // APB access
     assign Entry = {PADDR[7:2],2'b00};  //  32-bit word-aligned accesses
     assign Memwrite = PWRITE & PENABLE & PSEL;  // Only write in access phase
-    assign PREADY = Entry == SPI_TXDATA | Entry == SPI_RXDATA | Entry == SPI_IP | TransmitInactive; // Tie PREADY to transmission for hardware interlock
+    //assign PREADY = Entry == SPI_TXDATA | Entry == SPI_RXDATA | Entry == SPI_IP | TransmitInactive; // Tie PREADY to transmission for hardware interlock
+    assign PREADY = 1'b1;
 
     // Account for subword read/write circuitry
     // -- Note SPI registers are 32 bits no matter what; access them with LW SW.
@@ -230,27 +244,54 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
                 default:     Dout <= 32'b0;
             endcase
         end
-
+    always_ff@(posedge PCLK)
+        if (~PRESETn) begin 
+            SckDivLock <= 12'd3;
+            SckModeLock <= 2'b0;
+            ChipSelectIDLock <= 2'b0;
+            ChipSelectDefLock <= 4'b1111;
+            ChipSelectModeLock <= 2'b0;
+            Delay0Lock <= {8'b1,8'b1};
+            Delay1Lock <= {8'b0,8'b1};
+            FormatLock <= {5'b10000};
+            TransmitWatermarkLock <= 3'b0;
+            ReceiveWatermarkLock <= 3'b0;
+            InterruptEnableLock <= 2'b0;
+            InterruptPendingLock <= 2'b0;
+        end else if (TransmitInactive) begin // writes
+            SckDivLock <= SckDiv;
+            SckModeLock <= SckMode;
+            ChipSelectIDLock <= ChipSelectID;
+            ChipSelectDefLock <= ChipSelectDef;
+            ChipSelectModeLock <= ChipSelectMode;
+            Delay0Lock <= Delay0;
+            Delay1Lock <= Delay1;
+            FormatLock <= Format;
+            TransmitWatermarkLock <= TransmitWatermark;
+            ReceiveWatermarkLock <= ReceiveWatermark;
+            InterruptEnableLock <= InterruptEnable;
+            InterruptPendingLock <= InterruptPending;
+        end
     // SPI enable generation, where SCLK = PCLK/(2*(SckDiv + 1))
     // Asserts SCLKenable at the rising and falling edge of SCLK by counting from 0 to SckDiv
     // Active at 2x SCLK frequency to account for implicit half cycle delays and actions on both clock edges depending on phase
     // When SckDiv is 0, count doesn't work and SCLKenable is simply PCLK
-    assign ZeroDiv = ~|(SckDiv[10:0]);
-    assign SCLKenable = ZeroDiv ? PCLK : (DivCounter == SckDiv);
-    assign SCLKenableEarly = ((DivCounter + 12'b1) == SckDiv);
+    assign ZeroDiv = ~|(SckDivLock[10:0]);
+    assign SCLKenable = ZeroDiv ? PCLK : (DivCounter == SckDivLock);
+    assign SCLKenableEarly = ((DivCounter + 12'b1) == SckDivLock);
     always_ff @(posedge PCLK)
         if (~PRESETn) DivCounter <= '0;
         else if (SCLKenable) DivCounter <= 12'b0;
         else DivCounter <= DivCounter + 12'b1;
 
     // Asserts when transmission is one frame before complete
-    assign ReceivePenultimateFrame = ((FrameCount + 4'b0001) == Format[4:1]);
+    assign ReceivePenultimateFrame = ((FrameCount + 4'b0001) == FormatLock[4:1]);
     assign FirstFrame = (FrameCount == 4'b0);
 
     // Computing delays
     // When sckmode.pha = 0, an extra half-period delay is implicit in the cs-sck delay, and vice-versa for sck-cs
-    assign ImplicitDelay1 = SckMode[0] ? 9'b0 : 9'b1;
-    assign ImplicitDelay2 = SckMode[0] ? 9'b1 : 9'b0;
+    assign ImplicitDelay1 = SckModeLock[0] ? 9'b0 : 9'b1;
+    assign ImplicitDelay2 = SckModeLock[0] ? 9'b1 : 9'b0;
 
     // Calculate when tx/rx shift registers are full/empty
 
@@ -277,7 +318,7 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
             endcase
         end
 
-    assign ReceiveShiftFull = SckMode[0] ? (ReceiveState == ReceiveShiftFullState) : (ReceiveState == ReceiveShiftDelayState);
+    assign ReceiveShiftFull = SckModeLock[0] ? (ReceiveState == ReceiveShiftFullState) : (ReceiveState == ReceiveShiftDelayState);
 
     // Calculate tx/rx fifo write and recieve increment signals 
 
@@ -289,7 +330,7 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
         if (~PRESETn) ReceiveFIFOReadIncrement <= 1'b0;
         else ReceiveFIFOReadIncrement <= ((Entry == SPI_RXDATA) & ~ReceiveFIFOReadEmpty & PSEL & ~ReceiveFIFOReadIncrement);
 
-    assign TransmitShiftRegLoad = ~TransmitShiftEmpty & ~Active | (((ChipSelectMode == 2'b10) & ~|(Delay1[15:8])) & ((ReceiveShiftFullDelay | ReceiveShiftFull) & ~SampleEdge & ~TransmitFIFOReadEmpty));
+    assign TransmitShiftRegLoad = ~TransmitShiftEmpty & ~Active | (((ChipSelectModeLock == 2'b10) & ~|(Delay1Lock[15:8])) & ((ReceiveShiftFullDelay | ReceiveShiftFull) & ~SampleEdge & ~TransmitFIFOReadEmpty));
 
     always_ff @(posedge PCLK)
         if (~PRESETn) TransmitShiftRegLoadDelay <=0;
@@ -299,9 +340,9 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
         if (~PRESETn) TransmitFIFOReadIncrement <= 0;
         else if (SCLKenable) TransmitFIFOReadIncrement <= TransmitShiftRegLoadSingleCycle;
     // Tx/Rx FIFOs
-    spi_fifo #(3,8) txFIFO(PCLK, 1'b1, SCLKenable, PRESETn, TransmitFIFOWriteIncrement, TransmitFIFOReadIncrement, TransmitData[7:0], TransmitWriteWatermarkLevel, TransmitWatermark[2:0],
+    spi_fifo #(3,8) txFIFO(PCLK, 1'b1, SCLKenable, PRESETn, TransmitFIFOWriteIncrement, TransmitFIFOReadIncrement, TransmitData[7:0], TransmitWriteWatermarkLevel, TransmitWatermarkLock[2:0],
                             TransmitFIFOReadData[7:0], TransmitFIFOWriteFull, TransmitFIFOReadEmpty, TransmitWriteMark, TransmitReadMark);
-    spi_fifo #(3,8) rxFIFO(PCLK, SCLKenable, 1'b1, PRESETn, ReceiveFiFoWriteInc, ReceiveFIFOReadIncrement, ReceiveShiftRegEndian, ReceiveWatermark[2:0], ReceiveReadWatermarkLevel, 
+    spi_fifo #(3,8) rxFIFO(PCLK, SCLKenable, 1'b1, PRESETn, ReceiveFiFoWriteInc, ReceiveFIFOReadIncrement, ReceiveShiftRegEndian, ReceiveWatermarkLock[2:0], ReceiveReadWatermarkLevel, 
                             ReceiveData[7:0], ReceiveFIFOWriteFull, ReceiveFIFOReadEmpty, RecieveWriteMark, RecieveReadMark);
 
     always_ff @(posedge PCLK)
@@ -333,7 +374,7 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
         if (~PRESETn) begin 
                         state <= CS_INACTIVE;
                         FrameCount <= 4'b0;
-                        SPICLK <= SckMode[1];
+                        SPICLK <= SckModeLock[1];
         end else if (SCLKenable) begin
             /* verilator lint_off CASEINCOMPLETE */
             case (state)
@@ -343,50 +384,50 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
                         FrameCount <= 4'b0;
                         InterCSCount <= 9'b10;
                         InterXFRCount <= 9'b1;
-                        if ((~TransmitFIFOReadEmpty | ~TransmitShiftEmpty) & ((|(Delay0[7:0])) | ~SckMode[0])) state <= DELAY_0;
+                        if ((~TransmitFIFOReadEmpty | ~TransmitShiftEmpty) & ((|(Delay0Lock[7:0])) | ~SckModeLock[0])) state <= DELAY_0;
                         else if ((~TransmitFIFOReadEmpty | ~TransmitShiftEmpty)) begin
                           state <= ACTIVE_0;
-                          SPICLK <= ~SckMode[1];
-                        end else SPICLK <= SckMode[1];
+                          SPICLK <= ~SckModeLock[1];
+                        end else SPICLK <= SckModeLock[1];
                         end
                 DELAY_0: begin
                         CS_SCKCount <= CS_SCKCount + 9'b1;
-                        if (CS_SCKCount >= (({Delay0[7:0], 1'b0}) + ImplicitDelay1)) begin
+                        if (CS_SCKCount >= (({Delay0Lock[7:0], 1'b0}) + ImplicitDelay1)) begin
                           state <= ACTIVE_0;
-                          SPICLK <= ~SckMode[1];
+                          SPICLK <= ~SckModeLock[1];
                         end
                         end
                 ACTIVE_0: begin 
                         FrameCount <= FrameCount + 4'b1;
-                        SPICLK <= SckMode[1];
+                        SPICLK <= SckModeLock[1];
                         state <= ACTIVE_1;
                         end
                 ACTIVE_1: begin
                         InterXFRCount <= 9'b1;
-                        if (FrameCount < Format[4:1]) begin
+                        if (FrameCount < FormatLock[4:1]) begin
                           state <= ACTIVE_0;
-                          SPICLK <= ~SckMode[1];
+                          SPICLK <= ~SckModeLock[1];
                         end
-                        else if ((ChipSelectMode[1:0] == 2'b10) & ~|(Delay1[15:8]) & (~TransmitFIFOReadEmpty)) begin
+                        else if ((ChipSelectModeLock[1:0] == 2'b10) & ~|(Delay1Lock[15:8]) & (~TransmitFIFOReadEmpty)) begin
                             state <= ACTIVE_0;
-                            SPICLK <= ~SckMode[1];
+                            SPICLK <= ~SckModeLock[1];
                             CS_SCKCount <= 9'b1;
                             SCK_CSCount <= 9'b10;
                             FrameCount <= 4'b0;
                             InterCSCount <= 9'b10;
                         end
-                        else if (ChipSelectMode[1:0] == 2'b10) state <= INTER_XFR;
-                        else if (~|(Delay0[15:8]) & (~SckMode[0])) state <= INTER_CS;
+                        else if (ChipSelectModeLock[1:0] == 2'b10) state <= INTER_XFR;
+                        else if (~|(Delay0Lock[15:8]) & (~SckModeLock[0])) state <= INTER_CS;
                         else state <= DELAY_1;
                         end
                 DELAY_1: begin
                         SCK_CSCount <= SCK_CSCount + 9'b1;
-                        if (SCK_CSCount >= (({Delay0[15:8], 1'b0}) + ImplicitDelay2)) state <= INTER_CS;
+                        if (SCK_CSCount >= (({Delay0Lock[15:8], 1'b0}) + ImplicitDelay2)) state <= INTER_CS;
                         end
                 INTER_CS: begin
                         InterCSCount <= InterCSCount + 9'b1;
-                        SPICLK <= SckMode[1];
-                        if (InterCSCount >= ({Delay1[7:0],1'b0})) state <= CS_INACTIVE;
+                        SPICLK <= SckModeLock[1];
+                        if (InterCSCount >= ({Delay1Lock[7:0],1'b0})) state <= CS_INACTIVE;
                         end
                 INTER_XFR: begin
                         CS_SCKCount <= 9'b1;
@@ -394,11 +435,11 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
                         FrameCount <= 4'b0;
                         InterCSCount <= 9'b10;
                         InterXFRCount <= InterXFRCount + 9'b1;
-                    if ((InterXFRCount >= ({Delay1[15:8], 1'b0})) & (~TransmitFIFOReadEmptyDelay | ~TransmitShiftEmpty)) begin
+                    if ((InterXFRCount >= ({Delay1Lock[15:8], 1'b0})) & (~TransmitFIFOReadEmptyDelay | ~TransmitShiftEmpty)) begin
                           state <= ACTIVE_0;
-                          SPICLK <= ~SckMode[1];
-                        end else if (~|ChipSelectMode[1:0]) state <= CS_INACTIVE;
-                        else SPICLK <= SckMode[1];
+                          SPICLK <= ~SckModeLock[1];
+                        end else if (~|ChipSelectModeLock[1:0]) state <= CS_INACTIVE;
+                        else SPICLK <= SckModeLock[1];
                         end
             endcase
             /* verilator lint_off CASEINCOMPLETE */
@@ -406,27 +447,27 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
 
             
 
-    assign DelayMode = SckMode[0] ? (state == DELAY_1) : (state == ACTIVE_1 & ReceiveShiftFull);
-    assign ChipSelectInternal = (state == CS_INACTIVE | state == INTER_CS | DelayMode & ~|(Delay0[15:8])) ? ChipSelectDef : ~ChipSelectDef;
+    assign DelayMode = SckModeLock[0] ? (state == DELAY_1) : (state == ACTIVE_1 & ReceiveShiftFull);
+    assign ChipSelectInternal = (state == CS_INACTIVE | state == INTER_CS | DelayMode & ~|(Delay0Lock[15:8])) ? ChipSelectDefLock : ~ChipSelectDefLock;
     assign Active = (state == ACTIVE_0 | state == ACTIVE_1);
-    assign SampleEdge = SckMode[0] ? (state == ACTIVE_1) : (state == ACTIVE_0);
-    assign ZeroDelayHoldMode = ((ChipSelectMode == 2'b10) & (~|(Delay1[7:4])));
-    assign TransmitInactive = ((state == INTER_CS) | (state == CS_INACTIVE) | (state == INTER_XFR) | (ReceiveShiftFullDelayPCLK & ZeroDelayHoldMode) | ((state == ACTIVE_1) & ((ChipSelectMode[1:0] == 2'b10) & ~|(Delay1[15:8]) & (~TransmitFIFOReadEmpty) & (FrameCount == Format[4:1]))));
+    assign SampleEdge = SckModeLock[0] ? (state == ACTIVE_1) : (state == ACTIVE_0);
+    assign ZeroDelayHoldMode = ((ChipSelectModeLock == 2'b10) & (~|(Delay1Lock[7:4])));
+    assign TransmitInactive = ((state == INTER_CS) | (state == CS_INACTIVE) | (state == INTER_XFR) | (ReceiveShiftFullDelayPCLK & ZeroDelayHoldMode) | ((state == ACTIVE_1) & ((ChipSelectModeLock[1:0] == 2'b10) & ~|(Delay1Lock[15:8]) & (~TransmitFIFOReadEmpty) & (FrameCount == FormatLock[4:1]))));
     assign Active0 = (state == ACTIVE_0);
     assign ShiftEdgeSPICLK = ZeroDiv ? ~SPICLK : SPICLK;
 
   // Signal tracks which edge of sck to shift data
     always_comb
-        case(SckMode[1:0])
+        case(SckModeLock[1:0])
             2'b00: ShiftEdge = ShiftEdgeSPICLK & SCLKenable;
-            2'b01: ShiftEdge = (~ShiftEdgeSPICLK & ~FirstFrame & (|(FrameCount) | (CS_SCKCount >= (({Delay0[7:0], 1'b0}) + ImplicitDelay1))) & SCLKenable & (FrameCount != Format[4:1]) & ~TransmitInactive);
+            2'b01: ShiftEdge = (~ShiftEdgeSPICLK & ~FirstFrame & (|(FrameCount) | (CS_SCKCount >= (({Delay0Lock[7:0], 1'b0}) + ImplicitDelay1))) & SCLKenable & (FrameCount != FormatLock[4:1]) & ~TransmitInactive);
             2'b10: ShiftEdge = ~ShiftEdgeSPICLK & SCLKenable; 
-            2'b11: ShiftEdge = (ShiftEdgeSPICLK & ~FirstFrame & (|(FrameCount) | (CS_SCKCount >= (({Delay0[7:0], 1'b0}) + ImplicitDelay1))) & SCLKenable & (FrameCount != Format[4:1]) & ~TransmitInactive);
+            2'b11: ShiftEdge = (ShiftEdgeSPICLK & ~FirstFrame & (|(FrameCount) | (CS_SCKCount >= (({Delay0Lock[7:0], 1'b0}) + ImplicitDelay1))) & SCLKenable & (FrameCount != FormatLock[4:1]) & ~TransmitInactive);
             default: ShiftEdge = ShiftEdgeSPICLK & SCLKenable;
         endcase
 
     // Transmit shift register
-    assign TransmitDataEndian = Format[0] ? {TransmitFIFOReadData[0], TransmitFIFOReadData[1], TransmitFIFOReadData[2], TransmitFIFOReadData[3], TransmitFIFOReadData[4], TransmitFIFOReadData[5], TransmitFIFOReadData[6], TransmitFIFOReadData[7]} : TransmitFIFOReadData[7:0];
+    assign TransmitDataEndian = FormatLock[0] ? {TransmitFIFOReadData[0], TransmitFIFOReadData[1], TransmitFIFOReadData[2], TransmitFIFOReadData[3], TransmitFIFOReadData[4], TransmitFIFOReadData[5], TransmitFIFOReadData[6], TransmitFIFOReadData[7]} : TransmitFIFOReadData[7:0];
     always_ff @(posedge PCLK)
         if(~PRESETn)                        TransmitShiftReg <= 8'b0;
         else if (TransmitShiftRegLoadSingleCycle)      TransmitShiftReg <= TransmitDataEndian;
@@ -447,21 +488,21 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
         end
 
     // Aligns received data and reverses if little-endian
-    assign LeftShiftAmount = 4'h8 - Format[4:1];
+    assign LeftShiftAmount = 4'h8 - FormatLock[4:1];
     assign ASR = ReceiveShiftReg << LeftShiftAmount[2:0];
-    assign ReceiveShiftRegEndian = Format[0] ? {ASR[0], ASR[1], ASR[2], ASR[3], ASR[4], ASR[5], ASR[6], ASR[7]} : ASR[7:0];
+    assign ReceiveShiftRegEndian = FormatLock[0] ? {ASR[0], ASR[1], ASR[2], ASR[3], ASR[4], ASR[5], ASR[6], ASR[7]} : ASR[7:0];
 
     // Interrupt logic: raise interrupt if any enabled interrupts are pending
-    assign SPIIntr = |(InterruptPending & InterruptEnable);
+    assign SPIIntr = |(InterruptPendingLock & InterruptEnableLock);
 
     // Chip select logic
     always_comb
-        case(ChipSelectID[1:0])
-            2'b00: ChipSelectAuto = {ChipSelectDef[3], ChipSelectDef[2], ChipSelectDef[1], ChipSelectInternal[0]};
-            2'b01: ChipSelectAuto = {ChipSelectDef[3],ChipSelectDef[2], ChipSelectInternal[1], ChipSelectDef[0]};
-            2'b10: ChipSelectAuto = {ChipSelectDef[3],ChipSelectInternal[2], ChipSelectDef[1], ChipSelectDef[0]};
-            2'b11: ChipSelectAuto = {ChipSelectInternal[3],ChipSelectDef[2], ChipSelectDef[1], ChipSelectDef[0]};
+        case(ChipSelectIDLock[1:0])
+            2'b00: ChipSelectAuto = {ChipSelectDefLock[3], ChipSelectDefLock[2], ChipSelectDefLock[1], ChipSelectInternal[0]};
+            2'b01: ChipSelectAuto = {ChipSelectDefLock[3],ChipSelectDefLock[2], ChipSelectInternal[1], ChipSelectDefLock[0]};
+            2'b10: ChipSelectAuto = {ChipSelectDefLock[3],ChipSelectInternal[2], ChipSelectDefLock[1], ChipSelectDefLock[0]};
+            2'b11: ChipSelectAuto = {ChipSelectInternal[3],ChipSelectDefLock[2], ChipSelectDefLock[1], ChipSelectDefLock[0]};
         endcase
 
-    assign SPICS = ChipSelectMode[0] ? ChipSelectDef : ChipSelectAuto;
+    assign SPICS = ChipSelectModeLock[0] ? ChipSelectDefLock : ChipSelectAuto;
 endmodule
