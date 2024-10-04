@@ -208,7 +208,7 @@ test_cases:
 # Test phase
 
 .8byte sck_div, 0x00000003, write32_test    # reset sck_div to 0x03 so only sck_mode is different
-.8byte sck_mode, 0x00000001, write32_test   # change phase to falling edge
+.8byte sck_mode, 0x00000001, write32_test   # change phase to leading edge shift
 .8byte tx_data, 0x000000A0, write32_test   # place 8'h11 into tx_data
 .8byte 0x0, 0x00000000, spi_data_wait           # wait for transmission to end
 .8byte rx_data, 0x000000A0, read32_test     # read rx_data
