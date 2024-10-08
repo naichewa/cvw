@@ -166,6 +166,9 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
     logic [2:0]  TransmitWatermarkLock, ReceiveWatermarkLock;
     logic [1:0]  InterruptEnableLock, InterruptPendingLock;
 
+    logic RecieveFIFOWriteIncPrecursor;
+    logic FinalFrame;
+    logic NextStateActive;
 
 
 
@@ -260,7 +263,7 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
             ReceiveWatermarkLock <= 3'b0;
             InterruptEnableLock <= 2'b0;
             InterruptPendingLock <= 2'b0;
-        end else if (TransmitInactive) begin // writes
+        end else if (TransmitInactive & ~NextStateActive) begin // writes
             SckDivLock <= SckDiv;
             SckModeLock <= SckMode;
             ChipSelectIDLock <= ChipSelectID;
@@ -272,7 +275,6 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
             TransmitWatermarkLock <= TransmitWatermark;
             ReceiveWatermarkLock <= ReceiveWatermark;
             InterruptEnableLock <= InterruptEnable;
-            InterruptPendingLock <= InterruptPending;
         end
     // SPI enable generation, where SCLK = PCLK/(2*(SckDiv + 1))
     // Asserts SCLKenable at the rising and falling edge of SCLK by counting from 0 to SckDiv
@@ -292,6 +294,7 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
     // Asserts when transmission is one frame before complete
     assign ReceivePenultimateFrame = ((FrameCount + 4'b0001) == FormatLock[4:1]);
     assign FirstFrame = (FrameCount == 4'b0);
+    assign FinalFrame = (FrameCount == FormatLock[4:1]);
 
     // Computing delays
     // When sckmode.pha = 0, an extra half-period delay is implicit in the cs-sck delay, and vice-versa for sck-cs
@@ -346,9 +349,9 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
         if (~PRESETn) TransmitFIFOReadIncrement <= 0;
         else if (SCLKenable) TransmitFIFOReadIncrement <= TransmitShiftRegLoadSingleCycle;
     // Tx/Rx FIFOs
-    spi_fifo #(3,8) txFIFO(PCLK, 1'b1, SCLKenable, PRESETn, TransmitFIFOWriteIncrement, TransmitFIFOReadIncrement, TransmitData[7:0], TransmitWriteWatermarkLevel, TransmitWatermarkLock[2:0],
+    spi_fifo #(3,8) txFIFO(PCLK, 1'b1, SCLKenable, PRESETn, TransmitFIFOWriteIncrement, TransmitFIFOReadIncrement, TransmitData[7:0], TransmitWriteWatermarkLevel, TransmitWatermark[2:0],
                             TransmitFIFOReadData[7:0], TransmitFIFOWriteFull, TransmitFIFOReadEmpty, TransmitWriteMark, TransmitReadMark);
-    spi_fifo #(3,8) rxFIFO(PCLK, SCLKenable, 1'b1, PRESETn, ReceiveFiFoWriteInc, ReceiveFIFOReadIncrement, ReceiveShiftRegEndian, ReceiveWatermarkLock[2:0], ReceiveReadWatermarkLevel, 
+    spi_fifo #(3,8) rxFIFO(PCLK, SCLKenable, 1'b1, PRESETn, ReceiveFiFoWriteInc, ReceiveFIFOReadIncrement, ReceiveShiftRegEndian, ReceiveWatermark[2:0], ReceiveReadWatermarkLevel, 
                             ReceiveData[7:0], ReceiveFIFOWriteFull, ReceiveFIFOReadEmpty, RecieveWriteMark, RecieveReadMark);
 
     always_ff @(posedge PCLK)
@@ -360,10 +363,11 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
         else if (SCLKenable) ReceiveShiftFullDelay <= ReceiveShiftFull;
 
   assign ReceiveFiFoTakingData = ReceiveFiFoWriteInc & ~ReceiveFIFOWriteFull;
+  assign RecieveFIFOWriteIncPrecursor = SckMode[0] ? (ReceiveState == ReceiveShiftFullState) : (ReceivePenultimateFrame & SampleEdge);
   
     always_ff @(posedge PCLK)
         if (~PRESETn) ReceiveFiFoWriteInc <= 1'b0;
-        else if (SCLKenable & ReceiveShiftFull) ReceiveFiFoWriteInc <= 1'b1;
+        else if (SCLKenable & RecieveFIFOWriteIncPrecursor) ReceiveFiFoWriteInc <= 1'b1;
         else if (SCLKenable & ReceiveFiFoTakingData) ReceiveFiFoWriteInc <= 1'b0;
     always_ff @(posedge PCLK)
         if (~PRESETn) ReceiveShiftFullDelayPCLK <= 1'b0;
@@ -452,7 +456,8 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
         end
 
             
-
+    assign NextStateActive = (((state == INTER_XFR) & ((InterXFRCount >= ({Delay1Lock[15:8], 1'b0})) & (~TransmitFIFOReadEmptyDelay | ~TransmitShiftEmpty)))
+    | ((state == CS_INACTIVE) & (~TransmitFIFOReadEmpty | ~TransmitShiftEmpty)));
     assign DelayMode = SckModeLock[0] ? (state == DELAY_1) : (state == ACTIVE_1 & ReceiveShiftFull);
     assign ChipSelectInternal = (state == CS_INACTIVE | state == INTER_CS | DelayMode & ~|(Delay0Lock[15:8])) ? ChipSelectDefLock : ~ChipSelectDefLock;
     assign Active = (state == ACTIVE_0 | state == ACTIVE_1);
@@ -467,7 +472,7 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
         case(SckModeLock[1:0])
             //SPICLK active high, trailing edge shift: SCLKenable high 1 PCLK cycle before SPICLK transition, therefore both high on trailing edge.
             //First bit is loaded when cs goes low, no shift on last trailind edge
-            2'b00: ShiftEdge = ShiftEdgeSPICLK & SCLKenable & ~ReceivePenultimateFrame; 
+            2'b00: ShiftEdge = ShiftEdgeSPICLK & SCLKenable & ~FinalFrame; 
             //active state of SPICLK high, leading edge shift
             //First bit shifted on leading edge
             2'b01: ShiftEdge = (~ShiftEdgeSPICLK & ~FirstFrame & (|(FrameCount) | (CS_SCKCount >= (({Delay0Lock[7:0], 1'b0}) + ImplicitDelay1))) & SCLKenable & (FrameCount != FormatLock[4:1]) & ~TransmitInactive);
@@ -512,7 +517,7 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
     assign ReceiveShiftRegEndian = FormatLock[0] ? {ASR[0], ASR[1], ASR[2], ASR[3], ASR[4], ASR[5], ASR[6], ASR[7]} : ASR[7:0];
 
     // Interrupt logic: raise interrupt if any enabled interrupts are pending
-    assign SPIIntr = |(InterruptPendingLock & InterruptEnableLock);
+    assign SPIIntr = |(InterruptPending & InterruptEnable);
 
     // Chip select logic
     always_comb

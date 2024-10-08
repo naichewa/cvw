@@ -380,7 +380,7 @@ test_cases:
 # Test arbitrary inter_xfr delay
 
 .8byte delay1, 0x00050001, write32_test     # set inter_xfr delay to 5
-.8byte sck_mode, 0x00000001, write32_test
+.8byte sck_mode, 0x00000000, write32_test
 .8byte tx_data, 0x98877665, spi_burst_send
 .8byte 0x0, 0x00000003, spi_data_wait           # wait for transmission to end
 .8byte rx_data, 0x00000065, read32_test
@@ -416,6 +416,39 @@ test_cases:
 .8byte rx_data, 0x000000CD, read32_test
 .8byte rx_data, 0x000000BC, read32_test
 .8byte rx_data, 0x000000AB, read32_test
+
+.8byte delay0, 0x00000001, write32_test     # reset delay0
+.8byte tx_data, 0x10203040, spi_burst_send  # place 4 transmission burst w hold mode
+.8byte 0x0, 0x00000003, spi_data_wait       # wait
+.8byte rx_data, 0x00000040, read32_test     # read rx_data
+.8byte rx_data, 0x00000030, read32_test
+.8byte rx_data, 0x00000020, read32_test
+.8byte rx_data, 0x00000010, read32_test
+
+.8byte sck_mode, 0x00000001, write32_test   # change sck_mode to 01
+.8byte tx_data, 0xF1F2F3F4, spi_burst_send  # place 4 transmission burst w hold mode
+.8byte 0x0, 0x00000003, spi_data_wait       # wait
+.8byte rx_data, 0x000000F4, read32_test     # read rx_data
+.8byte rx_data, 0x000000F3, read32_test
+.8byte rx_data, 0x000000F2, read32_test
+.8byte rx_data, 0x000000F1, read32_test
+
+.8byte sck_mode, 0x00000002, write32_test   # change sck_mode to 02
+.8byte tx_data, 0x8A8B8C8D, spi_burst_send  # place 4 transmission burst w hold mode
+.8byte 0x0, 0x00000003, spi_data_wait       # wait
+.8byte rx_data, 0x0000008D, read32_test     # read rx_data
+.8byte rx_data, 0x0000008C, read32_test
+.8byte rx_data, 0x0000008B, read32_test
+.8byte rx_data, 0x0000008A, read32_test
+
+.8byte sck_mode, 0x00000003, write32_test   # change sck_mode to 01
+.8byte tx_data, 0x7A7B7C7D, spi_burst_send  # place 4 transmission burst w hold mode
+.8byte 0x0, 0x00000003, spi_data_wait       # wait
+.8byte rx_data, 0x0000007D, read32_test     # read rx_data
+.8byte rx_data, 0x0000007C, read32_test
+.8byte rx_data, 0x0000007B, read32_test
+.8byte rx_data, 0x0000007A, read32_test
+
 
 # Test hold mode deassert conditions
 
@@ -675,7 +708,7 @@ SETUP_PLIC
 .8byte ip, 0x00000002, read32_test          # recieve interrupt should be high
 .8byte 0x0, 0x00000000, readmip_test
 .8byte rx_data, 0x00000033, read32_test     # clear one more entry from recieve FIFO (2 entries)
-.8byte ip, 0x00000000, read32_test          # receive interrupt should be low
+.8byte ip, 0x00000000, read32_test          # receive interrupt should be low 164
 .8byte rx_data, 0x00000044, read32_test
 .8byte rx_data, 0x00000055, read32_test     # clear rx fifo
 
