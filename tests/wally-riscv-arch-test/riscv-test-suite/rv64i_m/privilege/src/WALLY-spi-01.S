@@ -671,6 +671,37 @@ test_cases:
 .8byte rx_data, 0x00000042, read32_test
 .8byte rx_data, 0x00000031, read32_test    #clear rx fifo
 
+# interlock in case where cs_mode = hold, switch to sckmode 01
+
+.8byte sck_mode, 0x00000000, write32_test   # reset polarity
+.8byte delay1, 0x00000000, write32_test     # set intercs delay to 0
+.8byte rx_mark, 0x0000001, write32_test     # preset rx watermark b/c of hardware interlock
+.8byte tx_data, 0x4a4b4c4d, spi_burst_send  # place 4 frames into tx fifo
+.8byte sck_mode, 0x00000001, write32_test   # 
+.8byte 0x0, 0x00000001, spi_data_wait       # wait for second transmission to end
+.8byte rx_mark, 0x0000003, write32_test     # preset rx watermark b/c of hardware interlock
+.8byte sck_mode, 0x00000000, write32_test   # flip polarity again
+.8byte 0x0, 0x00000003, spi_data_wait       # wait for final frame
+.8byte rx_data, 0x0000004d, read32_test
+.8byte rx_data, 0x0000004c, read32_test
+.8byte rx_data, 0x0000004b, read32_test
+.8byte rx_data, 0x0000004a, read32_test    #clear rx fifo
+
+# interlock in case where cs_mode = hold, switch to sckmdoe 11
+
+.8byte sck_mode, 0x00000000, write32_test   # reset polarity
+.8byte delay1, 0x00000000, write32_test     # set intercs delay to 0
+.8byte rx_mark, 0x0000001, write32_test     # preset rx watermark b/c of hardware interlock
+.8byte tx_data, 0x3a3b3c3d, spi_burst_send  # place 4 frames into tx fifo
+.8byte sck_mode, 0x00000003, write32_test   # 
+.8byte 0x0, 0x00000001, spi_data_wait       # wait for second transmission to end
+.8byte rx_mark, 0x0000003, write32_test     # preset rx watermark b/c of hardware interlock
+.8byte sck_mode, 0x00000000, write32_test   # flip polarity again
+.8byte 0x0, 0x00000003, spi_data_wait       # wait for final frame
+.8byte rx_data, 0x0000003d, read32_test
+.8byte rx_data, 0x0000003c, read32_test
+.8byte rx_data, 0x0000003c, read32_test
+.8byte rx_data, 0x0000003b, read32_test    #clear rx fifo
 
 
 

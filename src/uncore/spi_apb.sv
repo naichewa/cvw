@@ -130,6 +130,8 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
     logic [7:0] TransmitShiftReg;                   // Transmit shift register
     logic [7:0] ReceiveShiftReg;                    // Receive shift register
     logic SampleEdge;                               // Determines which edge of sck to sample from ReceiveShiftReg
+    logic SampleEdgeSingleCycle;
+    logic SampleEdgeDelay;
     logic [7:0] TransmitDataEndian;                 // Reverses TransmitData from txFIFO if littleendian, since TransmitReg always shifts MSB
     logic TransmitShiftRegLoad;                     // Determines when to load TransmitShiftReg
     logic TransmitShiftRegLoadSingleCycle;          // Version of TransmitShiftRegLoad which is only high for a single SCLK cycle to prevent double loads 
@@ -169,6 +171,7 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
     logic RecieveFIFOWriteIncPrecursor;
     logic FinalFrame;
     logic NextStateActive;
+    logic TSRLoadHoldMode;
 
 
 
@@ -339,7 +342,9 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
         else ReceiveFIFOReadIncrement <= ((Entry == SPI_RXDATA) & ~ReceiveFIFOReadEmpty & PSEL & ~ReceiveFIFOReadIncrement);
 
     // second case: csmode = hold, no interxfr delay condition
-    assign TransmitShiftRegLoad = ~TransmitShiftEmpty & ~Active | (((ChipSelectModeLock == 2'b10) & ~|(Delay1Lock[15:8])) & ((ReceiveShiftFullDelay | ReceiveShiftFull) & ~SampleEdge & ~TransmitFIFOReadEmpty));
+    //assign TransmitShiftRegLoad = ~TransmitShiftEmpty & ~Active | (((ChipSelectModeLock == 2'b10) & ~|(Delay1Lock[15:8])) & ((ReceiveShiftFullDelay | ReceiveShiftFull) & ~SampleEdge & ~TransmitFIFOReadEmpty));
+    assign TransmitShiftRegLoad = (~TransmitShiftEmpty & ~Active) | (((ChipSelectModeLock == 2'b10) & ~|(Delay1Lock[15:8])) & (TSRLoadHoldMode & ~TransmitFIFOReadEmpty));
+    assign TSRLoadHoldMode = SckMode[0] ? (ShiftEdge & FinalFrame) : (ShiftEdge & ReceivePenultimateFrame);
 
     always_ff @(posedge PCLK)
         if (~PRESETn) TransmitShiftRegLoadDelay <=0;
@@ -363,7 +368,7 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
         else if (SCLKenable) ReceiveShiftFullDelay <= ReceiveShiftFull;
 
   assign ReceiveFiFoTakingData = ReceiveFiFoWriteInc & ~ReceiveFIFOWriteFull;
-  assign RecieveFIFOWriteIncPrecursor = SckMode[0] ? (ReceiveState == ReceiveShiftFullState) : (ReceivePenultimateFrame & SampleEdge);
+  assign RecieveFIFOWriteIncPrecursor = SckModeLock[0] ? (ReceiveState == ReceiveShiftFullState) : (ReceivePenultimateFrame & SampleEdge);
   
     always_ff @(posedge PCLK)
         if (~PRESETn) ReceiveFiFoWriteInc <= 1'b0;
@@ -462,24 +467,32 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
     assign ChipSelectInternal = (state == CS_INACTIVE | state == INTER_CS | DelayMode & ~|(Delay0Lock[15:8])) ? ChipSelectDefLock : ~ChipSelectDefLock;
     assign Active = (state == ACTIVE_0 | state == ACTIVE_1);
     assign SampleEdge = SckModeLock[0] ? (state == ACTIVE_1) : (state == ACTIVE_0);
+    always_ff @(posedge PCLK)
+        if (~PRESETn) SampleEdgeDelay <= 0;
+        else SampleEdgeDelay <= SampleEdge;
+    assign SampleEdgeSingleCycle = SampleEdge & ~SampleEdgeDelay;
     assign ZeroDelayHoldMode = ((ChipSelectModeLock == 2'b10) & (~|(Delay1Lock[7:4])));
     assign TransmitInactive = ((state == INTER_CS) | (state == CS_INACTIVE) | (state == INTER_XFR) | (ReceiveShiftFullDelayPCLK & ZeroDelayHoldMode) | ((state == ACTIVE_1) & ((ChipSelectModeLock[1:0] == 2'b10) & ~|(Delay1Lock[15:8]) & (~TransmitFIFOReadEmpty) & (FrameCount == FormatLock[4:1]))));
     assign Active0 = (state == ACTIVE_0);
     assign ShiftEdgeSPICLK = ZeroDiv ? ~SPICLK : SPICLK;
-
+  // design decision: working around ShiftEdge, TransmitShiftLoad, and SampleEdge signals: Before, TSL was used 
+  // to load the shift register, and then 7 subsequent shift edges followed. However, the TSL wasn't always on the exact shift edge for
+  // hold mode cases. So: trying to combine TSL w shift edge to produce the load signal. 
   // Signal tracks which edge of sck to shift data
     always_comb
         case(SckModeLock[1:0])
             //SPICLK active high, trailing edge shift: SCLKenable high 1 PCLK cycle before SPICLK transition, therefore both high on trailing edge.
             //First bit is loaded when cs goes low, no shift on last trailind edge
-            2'b00: ShiftEdge = ShiftEdgeSPICLK & SCLKenable & ~FinalFrame; 
+            2'b00: ShiftEdge = ShiftEdgeSPICLK & SCLKenable; 
             //active state of SPICLK high, leading edge shift
             //First bit shifted on leading edge
-            2'b01: ShiftEdge = (~ShiftEdgeSPICLK & ~FirstFrame & (|(FrameCount) | (CS_SCKCount >= (({Delay0Lock[7:0], 1'b0}) + ImplicitDelay1))) & SCLKenable & (FrameCount != FormatLock[4:1]) & ~TransmitInactive);
+            2'b01: ShiftEdge = ~ShiftEdgeSPICLK & SCLKenable & ~FirstFrame;
+            //ShiftEdge = (~ShiftEdgeSPICLK  & (|(FrameCount) | (CS_SCKCount >= (({Delay0Lock[7:0], 1'b0}) + ImplicitDelay1))) & SCLKenable & (FrameCount != FormatLock[4:1]) & ~TransmitInactive);
             //active low, trailing edge shift
-            2'b10: ShiftEdge = ~ShiftEdgeSPICLK & SCLKenable; 
+            2'b10: ShiftEdge = ~ShiftEdgeSPICLK & SCLKenable & ~FinalFrame; 
             //active low, leading edge shift
-            2'b11: ShiftEdge = (ShiftEdgeSPICLK & ~FirstFrame & (|(FrameCount) | (CS_SCKCount >= (({Delay0Lock[7:0], 1'b0}) + ImplicitDelay1))) & SCLKenable & (FrameCount != FormatLock[4:1]) & ~TransmitInactive);
+            2'b11: ShiftEdge = ShiftEdgeSPICLK & SCLKenable & ~FirstFrame;
+            //ShiftEdge = (ShiftEdgeSPICLK & (|(FrameCount) | (CS_SCKCount >= (({Delay0Lock[7:0], 1'b0}) + ImplicitDelay1))) & SCLKenable & (FrameCount != FormatLock[4:1]) & ~TransmitInactive);
             default: ShiftEdge = ShiftEdgeSPICLK & SCLKenable;
         endcase
 
@@ -506,7 +519,7 @@ module spi_apb import cvw::*; #(parameter cvw_t P) (
     // Receive shift register
     always_ff @(posedge PCLK)
         if(~PRESETn)  ReceiveShiftReg <= 8'b0;
-        else if (SampleEdge & SCLKenableDelay) begin
+        else if (SampleEdgeSingleCycle & SCLKenableDelay) begin
             if (~Active)    ReceiveShiftReg <= 8'b0;
             else            ReceiveShiftReg <= {ReceiveShiftReg[6:0], ShiftIn};
         end

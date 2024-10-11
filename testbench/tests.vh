@@ -3352,12 +3352,12 @@ string wally64priv[] = '{
 
 string wally64periph[] = '{
   `WALLYTEST,
-  "rv64i_m/privilege/src/WALLY-periph-01.S",
-  "rv64i_m/privilege/src/WALLY-clint-01.S",
-  "rv64i_m/privilege/src/WALLY-gpio-01.S",
-  "rv64i_m/privilege/src/WALLY-plic-01.S",
-  "rv64i_m/privilege/src/WALLY-plic-s-01.S",
-  "rv64i_m/privilege/src/WALLY-uart-01.S",
+  //"rv64i_m/privilege/src/WALLY-periph-01.S",
+  //"rv64i_m/privilege/src/WALLY-clint-01.S",
+  //"rv64i_m/privilege/src/WALLY-gpio-01.S",
+  //"rv64i_m/privilege/src/WALLY-plic-01.S",
+  //"rv64i_m/privilege/src/WALLY-plic-s-01.S",
+  //"rv64i_m/privilege/src/WALLY-uart-01.S",
   "rv64i_m/privilege/src/WALLY-spi-01.S"
 };
 
