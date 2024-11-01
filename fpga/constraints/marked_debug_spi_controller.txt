@@ -150,3 +150,12 @@ uncore/spi_controller.sv: logic ContinueTransmitD
 uncore/spi_controller.sv: logic SCLKenable
 uncore/spi_apb.sv: logic ShiftIn
 uncore/spi_apb.sv: logic TransmitRegLoaded
+uncore/spi_controller.sv: logic PhaseOneOffset
+uncore/spi_controller.sv: logic SPICLK
+uncore/spi_apb.sv: logic: TransmitData
+uncore/spi_apb.sv: logic: TransmitReg
+uncore/spi_fifo.sv logic: winc
+uncore/spi_fifo.sv logic: rinc
+uncore/spi_fifo.sv logic: wptr
+uncore/spi_fifo.sv logic: rptr
+uncore/spi_fifo.sv logic: wfull
