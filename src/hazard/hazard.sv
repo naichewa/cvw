@@ -43,11 +43,10 @@ module hazard (
   logic                                       LatestUnstalledD, LatestUnstalledE, LatestUnstalledM, LatestUnstalledW;
   logic                                       FlushDCause, FlushECause, FlushMCause, FlushWCause;
 
-  logic WFIStallM, WFIInterruptedM;
+  logic WFIStallM;
 
   // WFI logic
   assign WFIStallM = wfiM & ~IntPendingM;         // WFI waiting for an interrupt or timeout
-  assign WFIInterruptedM = wfiM & IntPendingM;    // WFI detects a pending interrupt.  Retire WFI; trap if interrupt is enabled.
 
   // stalls and flushes
   // loads: stall for one cycle if the subsequent instruction depends on the load
@@ -68,11 +67,10 @@ module hazard (
   // Similarly, CSR writes and fences flush all subsequent instructions and refetch them in light of the new operating modes and cache/TLB contents
   // Branch misprediction is found in the Execute stage and must flush the next two instructions.
   //   However, an active division operation resides in the Execute stage, and when the BP incorrectly mispredicts the divide as a taken branch, the divide must still complete
-  // When a WFI is interrupted and causes a trap, it flushes the rest of the pipeline but not the W stage, because the WFI needs to commit
   assign FlushDCause = TrapM | RetM | CSRWriteFenceM | BPWrongE;
   assign FlushECause = TrapM | RetM | CSRWriteFenceM |(BPWrongE & ~(DivBusyE | FDivBusyE));
   assign FlushMCause = TrapM | RetM | CSRWriteFenceM;
-  assign FlushWCause = TrapM & ~WFIInterruptedM;
+  assign FlushWCause = TrapM;
 
   // Stall causes
   //  Most data dependency stalls are identified in the decode stage

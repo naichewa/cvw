@@ -42,7 +42,6 @@ add wave -noupdate -group HDU -group Stall -color Orange /testbench/dut/core/Sta
 add wave -noupdate -group HDU -group interrupts /testbench/dut/core/priv/priv/trap/PendingIntsM
 add wave -noupdate -group HDU -group interrupts /testbench/dut/core/priv/priv/trap/InstrValidM
 add wave -noupdate -group HDU -group interrupts /testbench/dut/core/priv/priv/trap/ValidIntsM
-add wave -noupdate -group HDU -group interrupts /testbench/dut/core/hzu/WFIInterruptedM
 add wave -noupdate -group {instruction pipeline} /testbench/InstrFName
 add wave -noupdate -group {instruction pipeline} /testbench/dut/core/ifu/PostSpillInstrRawF
 add wave -noupdate -group {instruction pipeline} /testbench/dut/core/ifu/InstrD
