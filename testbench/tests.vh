@@ -81,6 +81,7 @@ string coverage64gc[] = '{
   "pmpcfg2",
   "pmppriority",
   "pmpcbo",
+  "cboADPermission",
   "pmpadrdecs",
   "btbthrash",
   "fpuReservedRM",
