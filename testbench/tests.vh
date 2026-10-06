@@ -58,6 +58,7 @@ string coverage64gc[] = '{
   "tlbmisc",
   "tlbNAPOT",
   "tlbASID",
+  "misalignedADSpill",
   "tlbGLB",
   "tlbGLBASID",
   "sfencevmaglobal",
