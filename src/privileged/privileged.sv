@@ -119,7 +119,7 @@ module privileged import cvw::*;  #(parameter cvw_t P) (
   logic                     ExceptionM;                                     // Memory stage instruction caused a fault
   logic                     HPTWInstrAccessFaultM;                          // Hardware page table access fault while fetching instruction PTE
   logic                     HPTWInstrPageFaultM;                            // Hardware page table page fault while fetching instruction PTE
-  logic                     BreakpointFaultM, EcallFaultM;                  // breakpoint and Ecall traps; they do not retire
+  logic                     BreakpointFaultM, EcallFaultM;                  // breakpoint and Ecall traps should retire
 
   logic                     wfiW;
 
