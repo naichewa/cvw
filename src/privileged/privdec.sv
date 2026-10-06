@@ -39,7 +39,7 @@ module privdec import cvw::*;  #(parameter cvw_t P) (
   input  logic         STATUS_TSR, STATUS_TVM, STATUS_TW,   // status bits
   input  logic         TrapM,                               // Trap is occurring
   output logic         IllegalInstrFaultM,                  // Illegal instruction
-  output logic         EcallFaultM, BreakpointFaultM,       // Ecall or breakpoint; traps without retiring
+  output logic         EcallFaultM, BreakpointFaultM,       // Ecall or breakpoint; must retire, so don't flush it when the trap occurs
   output logic         sretM, mretM, RetM,                  // return instructions
   output logic         wfiM, wfiW, sfencevmaM,              // wfi / sfence.vma / sinval.vma instructions
   output logic         sfencevmaAllM                        // sfence.vma with rs2=x0: flush all TLB entries including global
