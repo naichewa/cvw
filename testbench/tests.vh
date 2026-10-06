@@ -68,6 +68,7 @@ string coverage64gc[] = '{
   "tlbTP",
   "tlbMisaligned",
   "hptwAccessFault",
+  "deferredexc",
   "nonleafpbmtfault",
   "amoAccessFault",
   "floatmisc",
