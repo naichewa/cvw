@@ -48,6 +48,7 @@ string coverage64gc[] = '{
   `COVERAGE,
   "ieu",
   "priv",
+  "wfiBackToBack",
   "ebu",
   "csrwrites",
   "ifu",
