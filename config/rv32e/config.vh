@@ -110,6 +110,9 @@ localparam logic SVPBMT_SUPPORTED  = 0;
 localparam logic SVNAPOT_SUPPORTED = 0;
 localparam logic SVINVAL_SUPPORTED = 0;
 localparam logic SVADU_SUPPORTED   = 0;
+localparam logic SMMPM_SUPPORTED   = 0;
+localparam logic SMNPM_SUPPORTED   = 0;
+localparam logic SSNPM_SUPPORTED   = 0;
 
 
 // LSU microarchitectural Features

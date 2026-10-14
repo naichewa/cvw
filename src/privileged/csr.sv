@@ -93,7 +93,8 @@ module csr import cvw::*;  #(parameter cvw_t P) (
   //
   output logic [P.XLEN-1:0]        CSRReadValW,               // value read from CSR
   output logic                     IllegalCSRAccessM,         // Illegal CSR access: CSR doesn't exist or is inaccessible at this privilege level
-  output logic                     BigEndianM                 // memory access is big-endian based on privilege mode and STATUS register endian fields
+  output logic                     BigEndianM,                 // memory access is big-endian based on privilege mode and STATUS register endian fields
+  output logic [2:0]               MENVCFG_PMM, SENVCFG_PMM, MSECCFG_PMM
 );
 
   localparam MIP = 12'h344;
@@ -126,6 +127,7 @@ module csr import cvw::*;  #(parameter cvw_t P) (
   logic [P.XLEN-1:0]       TVecAlignedM;
   logic                    InstrValidNotFlushedM;
   logic                    STimerInt;
+  logic [63:0]             MSECCFG_REGW;
   logic [63:0]             MENVCFG_REGW;
   logic [P.XLEN-1:0]       SENVCFG_REGW;
   logic                    ENVCFG_STCE; // supervisor timer counter enable
@@ -238,7 +240,7 @@ module csr import cvw::*;  #(parameter cvw_t P) (
     .MEDELEG_REGW, .MIDELEG_REGW,.PMPCFG_ARRAY_REGW, .PMPADDR_ARRAY_REGW,
     .MIP_REGW, .MIE_REGW, .WriteMSTATUSM, .WriteMSTATUSHM,
     .IllegalCSRMAccessM, .IllegalCSRMWriteReadonlyM,
-    .MENVCFG_REGW);
+    .MENVCFG_REGW, .MSECCFG_REGW);
 
 
   if (P.S_SUPPORTED) begin : csrs
@@ -296,11 +298,14 @@ module csr import cvw::*;  #(parameter cvw_t P) (
   assign ENVCFG_CBE =   (PrivilegeModeW == P.M_MODE) ? 4'b1111 :
                         (PrivilegeModeW == P.S_MODE | !P.S_SUPPORTED) ? MENVCFG_REGW[7:4] :
                                                                        (MENVCFG_REGW[7:4] & SENVCFG_REGW[7:4]);
+  // broadcast environmental configuration pointer masking signals
+  assign MENVCFG_PMM = MENVCFG_REGW[33:32];
+  assign SENVCFG_PMM = (P.XLEN == 64) ? SENVCFG_REGW[33:32] : 2'b0; //SENVCFG is XLEN, when XLEN = 32 PMM doesn't exist
   // FIOM presently doesn't do anything because Wally fences don't do anything
   assign ENVCFG_FIOM =  (PrivilegeModeW == P.M_MODE) ? 1'b1 :
                         (PrivilegeModeW == P.S_MODE | !P.S_SUPPORTED) ? MENVCFG_REGW[0] :
                                                                        (MENVCFG_REGW[0] & SENVCFG_REGW[0]);
-
+  assign SECCFG_PMM =   MSECCFG_REGW[33:32];
   // merge CSR Reads
   assign CSRReadValM = CSRUReadValM | CSRSReadValM | CSRMReadValM | CSRCReadValM;
   flopenrc #(P.XLEN) CSRValWReg(clk, reset, FlushW, ~StallW, CSRReadValM, CSRReadValW);

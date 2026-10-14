@@ -15,10 +15,11 @@ localparam VPN_BITS = (SV57_SUPPORTED ? (5*VPN_SEGMENT_BITS) :
                        SV39_SUPPORTED ? (3*VPN_SEGMENT_BITS) :
                                         (2*VPN_SEGMENT_BITS));
 localparam PPN_BITS    = (XLEN==32 ? 32'd22 : 32'd44);
-localparam PA_BITS     = (XLEN==32 ? 32'd34 : 32'd56);
+localparam PA_BITS     = (PMLEN16_SUPPORTED ? 32'd48 : (XLEN==32 ? 32'd34 : 32'd56));
 localparam SVMODE_BITS = (XLEN==32 ? 32'd1  : 32'd4);
 localparam ASID_BASE   = (XLEN==32 ? 32'd22 : 32'd44);
 localparam ASID_BITS   = (XLEN==32 ? 32'd9  : 32'd16);
+localparam PMLEN16_SUPPORTED = (SMMPM_SUPPORTED | SMNPM_SUPPORTED | SSNPM_SUPPORTED) & !SV57_SUPPORTED;
 
 // constants to check SATP_MODE against
 // defined in Table 4.3 of the privileged spec
