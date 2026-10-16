@@ -142,7 +142,6 @@ module ifu import cvw::*;  #(parameter cvw_t P) (
   logic                        BusCommittedF;                            // Bus memory operation in flight, delay interrupts
   logic                        CacheCommittedF;                          // I$ memory operation started, delay interrupts
   logic                        SelIROM;                                  // PMA indicates instruction address is in the IROM
-  logic [15:0]                 InstrRawE, InstrRawM;
   logic [LINELEN-1:0]          FetchBuffer;
   logic [31:0]                 ShiftUncachedInstr;
   logic                        ITLBMissF;
@@ -285,8 +284,9 @@ module ifu import cvw::*;  #(parameter cvw_t P) (
       logic                 ICacheBusAck;
       logic [1:0]           CacheBusRW, BusRW, CacheRWF;
 
-      assign BusRW = ~ITLBMissF & ~CacheableF & ~SelIROM & ~IFUFaultF ? IFURWF : '0;
-      assign CacheRWF = ~ITLBMissF & CacheableF & ~SelIROM & ~IFUFaultF ? IFURWF : '0;
+      // Wait for an ITLB walk (miss or A update) before fetching: a fill from the old PA would be tagged with the new PA
+      assign BusRW = ~ITLBMissOrUpdateRawF & ~CacheableF & ~SelIROM & ~IFUFaultF ? IFURWF : '0;
+      assign CacheRWF = ~ITLBMissOrUpdateRawF & CacheableF & ~SelIROM & ~IFUFaultF ? IFURWF : '0;
       cache #(.P(P), .PA_BITS(P.PA_BITS), .LINELEN(P.ICACHE_LINELENINBITS),
               .NUMSETS(P.ICACHE_WAYSIZEINBYTES*8/P.ICACHE_LINELENINBITS),
               .OFFSETLEN(OFFSETLEN), .SETLEN(SETLEN),
@@ -322,7 +322,7 @@ module ifu import cvw::*;  #(parameter cvw_t P) (
     end else begin : passthrough
       assign IFUHADDR = PCPF;
       logic [1:0] BusRW;
-      assign BusRW = ~ITLBMissF & ~SelIROM & ~IFUFaultF ? IFURWF : 0;
+      assign BusRW = ~ITLBMissOrUpdateRawF & ~SelIROM & ~IFUFaultF ? IFURWF : 0;
       assign IFUHSIZE = 3'b010;
 
       ahbinterface #(P.XLEN, 1'b0) ahbinterface(.HCLK(clk), .Flush(FlushD), .HRESETn(~reset), .HREADY(IFUHREADY),
@@ -476,8 +476,10 @@ module ifu import cvw::*;  #(parameter cvw_t P) (
   end
 
   // pipeline original compressed instruction in case it is needed for XTVAL on an illegal instruction exception
-  if (P.ZICSR_SUPPORTED & P.ZCA_SUPPORTED | 1) begin
-    logic CompressedM; // instruction is compressed
+  // Only csr reads InstrOrigM, and it differs from InstrM only for compressed instructions
+  if (P.ZICSR_SUPPORTED & P.ZCA_SUPPORTED) begin
+    logic        CompressedM; // instruction is compressed
+    logic [15:0] InstrRawE, InstrRawM;
     flopenrc #(16) InstrRawEReg(clk, reset, FlushE, ~StallE, InstrRawD[15:0], InstrRawE);
     flopenrc #(16) InstrRawMReg(clk, reset, FlushM, ~StallM, InstrRawE, InstrRawM);
     flopenrc #(1)  CompressedMReg(clk, reset, FlushM, ~StallM, CompressedE, CompressedM);
