@@ -37,6 +37,8 @@ module mmu import cvw::*;  #(parameter cvw_t P,
   input  logic [1:0]           STATUS_MPP,         // Status CSR: previous machine privilege level
   input  logic                 ENVCFG_PBMTE,       // Page-based memory types enabled
   input  logic                 ENVCFG_ADUE,        // HPTW A/D Update enable
+  input  logic [1:0]           MSECCFG_PMM, MENVCFG_PMM, SENVCFG_PMM, //Pointer mask config bits from CSR
+  input  logic [1:0]           MemRWM,             // Memory stage memory read/write decode for pointermask control
   input  logic [1:0]           PrivilegeModeW,     // Current privilege level of the processeor
   input  logic                 DisableTranslation, // virtual address translation disabled during D$ flush and HPTW walk that use physical addresses
   input  logic [P.XLEN+1:0]    VAdr,               // virtual/physical address from IEU or physical address from HPTW
@@ -60,7 +62,8 @@ module mmu import cvw::*;  #(parameter cvw_t P,
   input  logic [3:0]           CMOpM,                                                     // Cache management instructions
   input  logic                 AtomicAccessM, ExecuteAccessF, WriteAccessM, ReadAccessM,  // access type
   input var logic [7:0]        PMPCFG_ARRAY_REGW[P.PMP_ENTRIES-1:0],                      // PMP configuration
-  input var logic [P.PA_BITS-3:0] PMPADDR_ARRAY_REGW[P.PMP_ENTRIES-1:0]                   // PMP addresses
+  input var logic [P.PA_BITS-3:0] PMPADDR_ARRAY_REGW[P.PMP_ENTRIES-1:0],                  // PMP addresses
+  output logic                 PointerMaskApplicable, PMLength                            // Pointer Masking signals
 );
 
   logic [P.PA_BITS-1:0]        TLBPAdr;                  // physical address for TLB
@@ -93,10 +96,11 @@ module mmu import cvw::*;  #(parameter cvw_t P,
           .SATP_MODE(SATP_REGW[P.XLEN-1:P.XLEN-P.SVMODE_BITS]),
           .SATP_ASID(SATP_REGW[P.ASID_BASE+P.ASID_BITS-1:P.ASID_BASE]),
           .VAdr(VAdr[P.XLEN-1:0]), .STATUS_MXR, .STATUS_SUM, .STATUS_MPRV, .STATUS_MPP, .ENVCFG_PBMTE, .ENVCFG_ADUE,
+          .MSECCFG_PMM, .MENVCFG_PMM, .SENVCFG_PMM, .MemRWM,
           .EffectivePrivilegeModeW, .ReadAccess, .WriteAccess, .CMOpM,
           .DisableTranslation, .PTE, .PageTypeWriteVal,
           .TLBWrite, .TLBFlush, .TLBFlushAll, .TLBPAdr, .TLBMiss,
-          .Translate, .TLBPageFault, .UpdateDA, .PBMemoryType);
+          .Translate, .TLBPageFault, .UpdateDA, .PBMemoryType, .PointerMaskApplicable, .PMLength);
   end else begin : tlb // just pass address through as physical
     assign Translate    = 1'b0;
     assign TLBMiss      = 1'b0;
@@ -104,6 +108,8 @@ module mmu import cvw::*;  #(parameter cvw_t P,
     assign PBMemoryType = 2'b00;
     assign UpdateDA     = 1'b0;
     assign TLBPAdr      = '0;
+    assign PointerMaskApplicable = 1'b0;
+    assign PMLength = 1'b0;
   end
 
   // If translation is occurring, select translated physical address from TLB

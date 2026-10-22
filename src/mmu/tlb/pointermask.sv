@@ -34,31 +34,37 @@
 
 // current todos: implement mssec register in csrm, add to csr.sv
 module pointermask import cvw::*;   #(parameter cvw_t P) (
-    input logic [P.SVMODE_BITS-1.0]  SATP_MODE,
-    input logic [2:0]                MSECCFG_PMM, MENVCFG_PMM, SENVCFG_PMM,
-    input logic [1:0]                PrivilegeModeW,
-    input logic [1:0]                STATUS_MPP,
-    input logic                      STATUS_SPP, STATUS_MXR, STATUS_MPRV,
-    output logic                     MaskApplied
+    input logic [1:0]                MSECCFG_PMM, MENVCFG_PMM, SENVCFG_PMM,
+    input logic [1:0]                EffectivePrivilegeModeW,
+    input logic                      STATUS_MXR,
+    input logic [1:0]                MemRWM,
+    input logic [3:0]                CMOpM,
+
+    output logic                     PointerMaskApplicable, PMLength
 );
 
   logic MaskApplicableInstr;
-  logic MaskPrivilegeMode;
   //Determine if instruction is mask-applicable (explicit memory access)
-
+  assign MaskApplicableInstr = |(MemRWM) | |(CMOpM);
 
   //Determine if mask should be applied based on CSR configuration PMM bits and current privilege level
   always_comb
-    case(PrivilegeModeW)
-      00:           MaskPrivilegeMode = 2'b00;
-      01:           MaskPrivilegeMode = MPRV ? {1'b0,STATUS_SPP} : 2'b01;
-      11:           MaskPrivilegeMode= MPRV ? STATUS_MPP : 2'b11;
-      default:      MaskPrivilegeMode = PrivilegeModeW;
+    case(EffectivePrivilegeModeW)
+      2'b00:    begin
+                  PointerMaskApplicable = ~STATUS_MXR & MaskApplicableInstr & ((|(MENVCFG_PMM) & !S_SUPPORTED) | |(SENVCFG_PMM));
+                  PMLength = S_SUPPORTED ? MENVCFG_PMM[0] : SENVCFG_PMM[0];
+                end
+      2'b01:       begin
+                  PointerMaskApplicable = ~STATUS_MXR & MaskApplicableInstr & (|(MENVCFG_PMM) & P.S_SUPPORTED);
+                  PMLength = MENVCFG_PMM[0];
+                end
+      2'b11:       begin
+                  PointerMaskApplicable = ~STATUS_MXR & MaskApplicableInstr & (|(MSECCFG_PMM));
+                  PMLength = MSECCFG_PMM[0];
+                end
+      default:  begin
+                  PointerMaskApplicable = 1'b0;
+                  PMLength = 1'b0;
+                end
     endcase
-  always_comb
-    case(MaskPrivilegeMode)
-      00:           MaskApplied = MaskApplicableInstr & ((MENVCFG_PMM & !S_SUPPORTED) | SENVCFG_PMM);
-      01:           MaskApplied = MaskApplicableInstr & (MENVCFG_PMM & P.S_SUPPORTED);
-      11:           MaskApplied = MaskApplicableInstr & (MSECCFG_PMM | MENVCFG_PMM);
-      default:      MaskApplied = 1'b0;
-    endcase
+endmodule

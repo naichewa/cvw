@@ -71,6 +71,7 @@ module csr import cvw::*;  #(parameter cvw_t P) (
   input  logic                     InvalidateICacheM,
   input  logic                     DivBusyE,                  // integer divide busy
   input  logic                     FDivBusyE,                 // floating point divide busy
+  input logic                      PointerMaskApplicable, PMLength,
   // outputs from CSRs
   output logic [1:0]               STATUS_MPP,
   output logic                     STATUS_SPP, STATUS_TSR, STATUS_TVM,
@@ -93,7 +94,7 @@ module csr import cvw::*;  #(parameter cvw_t P) (
   output logic [P.XLEN-1:0]        CSRReadValW,               // value read from CSR
   output logic                     IllegalCSRAccessM,         // Illegal CSR access: CSR doesn't exist or is inaccessible at this privilege level
   output logic                     BigEndianM,                 // memory access is big-endian based on privilege mode and STATUS register endian fields
-  output logic [2:0]               MENVCFG_PMM, SENVCFG_PMM, MSECCFG_PMM
+  output logic [1:0]               MENVCFG_PMM, SENVCFG_PMM, MSECCFG_PMM //pointer masking config bits
 );
 
   localparam MIP = 12'h344;
@@ -131,6 +132,7 @@ module csr import cvw::*;  #(parameter cvw_t P) (
   logic [P.XLEN-1:0]       SENVCFG_REGW;
   logic                    ENVCFG_STCE; // supervisor timer counter enable
   logic                    ENVCFG_FIOM; // fence implies io (presently not used)
+  logic [63:0]             MaskedIEUAdrxTvalM; //Masked virtual address to write to Xtval
 
   // only valid unflushed instructions can access CSRs
   assign InstrValidNotFlushedM = InstrValidM & ~StallW & ~FlushW;
@@ -138,17 +140,28 @@ module csr import cvw::*;  #(parameter cvw_t P) (
   ///////////////////////////////////////////
   // XTVAL: gets value from PC, Instruction, or load/store address (for MTVAL/STVAL)
   ///////////////////////////////////////////
-
-  always_comb
-    if (InterruptM)           NextFaultXtvalM = '0;
-    else case (CauseM)
-      12, 1:                  NextFaultXtvalM = PCSpillM;  // Instruction page/access faults report the faulting half of a spilled fetch
-      3:                      NextFaultXtvalM = PCM;       // Breakpoint reports the address of the ebreak itself, not the second half of a spilled fetch
-      2:                      NextFaultXtvalM = {{(P.XLEN-32){1'b0}}, InstrOrigM}; // Illegal instruction fault
-      0, 4, 6, 13, 15, 5, 7:  NextFaultXtvalM = IEUAdrxTvalM; // Instruction misaligned, Load/Store Misaligned/page/access faults
-      default:                NextFaultXtvalM = '0; // Ecall, interrupts
-    endcase
-
+  if (P.SMMPM_SUPPORTED | P.SMNPM_SUPPORTED | P.SSNPM_SUPPORTED) begin //if pointer masking is supported, hardware writes to csrs can be subject to pointer masking
+    assign MaskedIEUAdrxTvalM = PMLength ? {{16{IEUAdrxTvalM[47]}}, IEUAdrxTvalM[47:0]} : {{7{IEUAdrxTvalM[56]}}, IEUAdrxTvalM[56:0]};
+    always_comb
+      if (InterruptM)           NextFaultXtvalM = '0;
+      else case (CauseM)
+        12, 1:                  NextFaultXtvalM = PCSpillM;  // Instruction page/access faults report the faulting half of a spilled fetch
+        3:                      NextFaultXtvalM = PCM;       // Breakpoint reports the address of the ebreak itself, not the second half of a spilled fetch
+        2:                      NextFaultXtvalM = {{(P.XLEN-32){1'b0}}, InstrOrigM}; // Illegal instruction fault
+        0, 4, 6, 13, 15, 5, 7:  NextFaultXtvalM = PointerMaskApplicable ? MaskedIEUAdrxTvalM : IEUAdrxTvalM; // Instruction misaligned, Load/Store Misaligned/page/access faults, pointer masking is applicable to hardware writes to xtval
+        default:                NextFaultXtvalM = '0; // Ecall, interrupts
+      endcase
+  end else begin
+    always_comb
+      if (InterruptM)           NextFaultXtvalM = '0;
+      else case (CauseM)
+        12, 1:                  NextFaultXtvalM = PCSpillM;  // Instruction page/access faults report the faulting half of a spilled fetch
+        3:                      NextFaultXtvalM = PCM;       // Breakpoint reports the address of the ebreak itself, not the second half of a spilled fetch
+        2:                      NextFaultXtvalM = {{(P.XLEN-32){1'b0}}, InstrOrigM}; // Illegal instruction fault
+        0, 4, 6, 13, 15, 5, 7:  NextFaultXtvalM = IEUAdrxTvalM; // Instruction misaligned, Load/Store Misaligned/page/access faults, pointer masking is applicable to hardware writes to xtval
+        default:                NextFaultXtvalM = '0; // Ecall, interrupts
+      endcase
+  end
   ///////////////////////////////////////////
   // Trap Vectoring & Returns; vectored traps must be aligned to 64-byte address boundaries
   ///////////////////////////////////////////
@@ -300,12 +313,14 @@ module csr import cvw::*;  #(parameter cvw_t P) (
                                                                        (MENVCFG_REGW[7:4] & SENVCFG_REGW[7:4]);
   // broadcast environmental configuration pointer masking signals
   assign MENVCFG_PMM = MENVCFG_REGW[33:32];
-  assign SENVCFG_PMM = (P.XLEN == 64) ? SENVCFG_REGW[33:32] : 2'b0; //SENVCFG is XLEN, when XLEN = 32 PMM doesn't exist
+  //SENVCFG is XLEN, when XLEN = 32 PMM doesn't exist
+  if (P.XLEN == 64) assign SENVCFG_PMM = SENVCFG_REGW[33:32];
+  else assign SENVCFG_PMM = 2'b0;
   // FIOM presently doesn't do anything because Wally fences don't do anything
   assign ENVCFG_FIOM =  (PrivilegeModeW == P.M_MODE) ? 1'b1 :
                         (PrivilegeModeW == P.S_MODE | !P.S_SUPPORTED) ? MENVCFG_REGW[0] :
                                                                        (MENVCFG_REGW[0] & SENVCFG_REGW[0]);
-  assign SECCFG_PMM =   MSECCFG_REGW[33:32];
+  assign MSECCFG_PMM =   MSECCFG_REGW[33:32];
   // merge CSR Reads
   assign CSRReadValM = CSRUReadValM | CSRSReadValM | CSRMReadValM | CSRCReadValM;
   flopenrc #(P.XLEN) CSRValWReg(clk, reset, FlushW, ~StallW, CSRReadValM, CSRReadValW);

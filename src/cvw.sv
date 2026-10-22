@@ -72,6 +72,10 @@ typedef struct packed {
   logic         ZICOND_SUPPORTED;
   logic         ZAAMO_SUPPORTED;
   logic         ZALRSC_SUPPORTED;
+  logic         SMMPM_SUPPORTED;
+  logic         SMNPM_SUPPORTED;
+  logic         SSNPM_SUPPORTED;
+  logic         PMLEN16_SUPPORTED;
 
   // Microarchitectural Features
   logic         BUS_SUPPORTED;

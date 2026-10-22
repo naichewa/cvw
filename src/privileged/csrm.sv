@@ -208,7 +208,7 @@ module csrm  import cvw::*;  #(parameter cvw_t P) (
       MENVCFG_PreWriteValM[62]  & P.SVPBMT_SUPPORTED,
       MENVCFG_PreWriteValM[61]  & P.SVADU_SUPPORTED,
       27'b0,
-      LegalizedMENVCFGPMM & {2{P.SMNPM_SUPPORTED} & (P.XLEN == 64)},
+      LegalizedMENVCFGPMM & {2{P.SMNPM_SUPPORTED & (P.XLEN == 64)}},
       24'b0,
       MENVCFG_PreWriteValM[7]   & P.ZICBOZ_SUPPORTED,
       MENVCFG_PreWriteValM[6]   & P.ZICBOM_SUPPORTED,
@@ -249,7 +249,6 @@ module csrm  import cvw::*;  #(parameter cvw_t P) (
   // PMM is a WARL field: 00 = disabled, 10 = PMLEN 7, 11 = PMLEN 16, and 01 is reserved.
   // Smmpm requires the largest supported address to fit in XLEN-PMLEN bits, so PMLEN 16 is
   // unavailable with Sv57 or PA_BITS > 48.  Illegal writes keep the old value, as menvcfg.CBIE does.
-  localparam PMLEN16_OK = !P.SV57_SUPPORTED & (P.PA_BITS <= 48);
   assign LegalizedMSECCFGPMM = ((MSECCFG_PreWriteValM[33:32] == 2'b01) |                 // reserved encoding
                         (MSECCFG_PreWriteValM[33:32] == 2'b11 & !P.PMLEN16_SUPPORTED)) ?  // PMLEN 16 too wide
                          MSECCFG_REGW[33:32] : MSECCFG_PreWriteValM[33:32];
