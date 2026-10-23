@@ -122,9 +122,11 @@ module mmu import cvw::*;  #(parameter cvw_t P,
   // An untranslated address is a physical address, so bits XLEN-1:PA_BITS must be zero.  Otherwise it is outside
   // the physical address space rather than an alias of a lower address, and the PMA checker raises an access fault.
   // Translated addresses come from the PPN and always fit; RV32 addresses are narrower than PA_BITS.
-  if (P.XLEN > P.PA_BITS) assign PAOutOfRange = ~Translate & (|VAdr[P.XLEN-1:P.PA_BITS]);
-  else                    assign PAOutOfRange = 1'b0;
-
+  // If RV64, pointer masking may be applicable. In that case, PA validity checks must be turned off for masked bits
+  if (P.XLEN > P.PA_BITS) begin
+    if (P.SMMPM_SUPPORTED | P.SMNPM_SUPPORTED | P.SSNPM_SUPPORTED) assign PAOutOfRange = PointerMaskApplicable ? (PMLength ? ~Translate : ~Translate & (|VAdr[56:P.PA_BITS])) : ~Translate & (|VAdr[P.XLEN-1:P.PA_BITS]);
+    else assign PAOutOfRange = ~Translate & (|VAdr[P.XLEN-1:P.PA_BITS]);
+  end else                    assign PAOutOfRange = 1'b0;
   ///////////////////////////////////////////
   // Check physical memory accesses
   ///////////////////////////////////////////
