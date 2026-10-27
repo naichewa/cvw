@@ -51,8 +51,8 @@ module pointermask import cvw::*;   #(parameter cvw_t P) (
   always_comb
     case(EffectivePrivilegeModeW)
       2'b00:    begin
-                  PointerMaskApplicable = ~STATUS_MXR & MaskApplicableInstr & ((|(MENVCFG_PMM) & !S_SUPPORTED) | |(SENVCFG_PMM));
-                  PMLength = S_SUPPORTED ? MENVCFG_PMM[0] : SENVCFG_PMM[0];
+                  PointerMaskApplicable = ~STATUS_MXR & MaskApplicableInstr & ((|(MENVCFG_PMM) & !P.S_SUPPORTED) | |(SENVCFG_PMM));
+                  PMLength = P.S_SUPPORTED ? MENVCFG_PMM[0] : SENVCFG_PMM[0];
                 end
       2'b01:       begin
                   PointerMaskApplicable = ~STATUS_MXR & MaskApplicableInstr & (|(MENVCFG_PMM) & P.S_SUPPORTED);
