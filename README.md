@@ -23,7 +23,7 @@ Wally is described in a textbook, [*RISC-V System-on-Chip Design*](https://pages
 
 # Configurations
 
-Wally default configurations are listed below.  Synthesis results from TSMC 28HPC+ TT conditions (0.9 V, 25 °C), Design Compiler, no layout, no RAM.  Embench results are without F and D.
+Wally default configurations are listed below.  Synthesis results from TSMC 28HPC+ TT conditions (0.9 V, 25 °C), Design Compiler, no layout.  Embench results are without F and D.
 
 | Config  | Features        | CoreMark/MHz | Embench Speed | Clock Frequency (MHz) | Area (mm^2) |
 | ------- | --------------- | -----------: | ------------: | --------------------: | ----------: |
