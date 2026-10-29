@@ -59,7 +59,7 @@ module pointermask import cvw::*;   #(parameter cvw_t P) (
                   PMLength = MENVCFG_PMM[0];
                 end
       2'b11:       begin
-                  PointerMaskApplicable = ~STATUS_MXR & MaskApplicableInstr & (|(MSECCFG_PMM));
+                  PointerMaskApplicable = MaskApplicableInstr & (|(MSECCFG_PMM));
                   PMLength = MSECCFG_PMM[0];
                 end
       default:  begin

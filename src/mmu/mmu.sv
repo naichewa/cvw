@@ -124,7 +124,7 @@ module mmu import cvw::*;  #(parameter cvw_t P,
   // Translated addresses come from the PPN and always fit; RV32 addresses are narrower than PA_BITS.
   // If RV64, pointer masking may be applicable. In that case, PA validity checks must be turned off for masked bits
   if (P.XLEN > P.PA_BITS) begin
-    if (P.SMMPM_SUPPORTED | P.SMNPM_SUPPORTED | P.SSNPM_SUPPORTED) assign PAOutOfRange = PointerMaskApplicable ? (PMLength ? ~Translate : ~Translate & (|VAdr[56:P.PA_BITS])) : ~Translate & (|VAdr[P.XLEN-1:P.PA_BITS]);
+    if (P.SMMPM_SUPPORTED | P.SMNPM_SUPPORTED | P.SSNPM_SUPPORTED) assign PAOutOfRange = PointerMaskApplicable ? (PMLength ? 1'b0 : ~Translate & (|VAdr[56:P.PA_BITS])) : ~Translate & (|VAdr[P.XLEN-1:P.PA_BITS]);
     else assign PAOutOfRange = ~Translate & (|VAdr[P.XLEN-1:P.PA_BITS]);
   end else                    assign PAOutOfRange = 1'b0;
   ///////////////////////////////////////////
