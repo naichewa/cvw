@@ -34,7 +34,7 @@ Wally default configurations are listed below.  Synthesis results from TSMC 28HP
 | rv64i   | RVI20U64        |         0.88 |          0.53 |                  2600 |       0.015 |
 | rv64gc  | RVA22S64        |         3.86 |          1.38 |                   840 |        0.48 |
 
-CoreMark and Embench (speed-optimized, scored per MHz) are compiled for each configuration's ISA and simulated with Verilator.  With F and D, the compiler optimizes away much of the timed work in the Embench nbody, st, and minver benchmarks.  rv32e, rv32i, and rv64i add performance counters to time the benchmarks.  Synthesis is of `wallypipelinedcore`, with rv32i, rv32imc, and rv64i using the AHB bus in place of the IROM and DTIM.  The rv32gc and rv64gc areas include 0.31 mm^2 of SRAM macros (16 KB I$ + 16 KB D$ + 68 Kb BTB + 2 Kb gshare PHT, plus cache tags).  rv32gc needs only a 36 Kb BTB and narrower tags but uses the same macros.
+CoreMark and Embench (speed-optimized, scored per MHz) are compiled for each configuration's ISA and simulated with Verilator.  With F and D, the compiler optimizes away much of the timed work in the Embench nbody, st, and minver benchmarks.  rv32e, rv32i, and rv64i add performance counters to time the benchmarks.  Synthesis is of `wallypipelinedcore`, with rv32i, rv32imc, and rv64i using the AHB bus in place of the IROM and DTIM.  The rv32gc and rv64gc areas include 0.31 mm^2 of SRAM macros (43.5 KB, including I$ and D$ data and tags, BTB, and PHT).  rv32gc uses the same macros, though its narrower tags and BTB entries need only 38 KB.
 
 # Verification
 
