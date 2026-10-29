@@ -333,8 +333,9 @@ module csrm import cvw::*; #(parameter cvw_t P) (
       MENVCFGH:      if (P.U_SUPPORTED & P.XLEN == 32) CSRMReadValM = MENVCFGH_REGW;
                      else IllegalCSRMAccessM = 1'b1;
       MCOUNTINHIBIT: CSRMReadValM = {{(P.XLEN-32){1'b0}}, MCOUNTINHIBIT_REGW};
-      MSECCFG:       CSRMReadValM = MSECCFG_REGW[P.XLEN-1:0];
-      MSECCFGH:      if (P.XLEN==32) CSRMReadValM = MSECCFG_REGW[63:32];
+      MSECCFG:       if (P.ZPM_SUPPORTED) CSRMReadValM = MSECCFG_REGW[P.XLEN-1:0];
+                     else IllegalCSRMAccessM = 1'b1;
+      MSECCFGH:      if (P.ZPM_SUPPORTED & P.XLEN==32) CSRMReadValM = MSECCFG_REGW[63:32];
                      else IllegalCSRMAccessM = 1'b1;
       default:       IllegalCSRMAccessM = 1'b1;
     endcase

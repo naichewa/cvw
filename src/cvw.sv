@@ -75,6 +75,7 @@ typedef struct packed {
   logic         SMMPM_SUPPORTED;
   logic         SMNPM_SUPPORTED;
   logic         SSNPM_SUPPORTED;
+  logic         ZPM_SUPPORTED;
   logic         PMLEN16_SUPPORTED;
 
   // Microarchitectural Features
