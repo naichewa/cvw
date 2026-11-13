@@ -74,7 +74,7 @@ deriv_coverage_tests = {
     # EXT_IO window: uncached, non-idempotent, no AMOs or LR/SC, not executable
     "extio_rv64gc": ["extIOWindow"],
     # misaligned accesses across the top of the Sv48 range with PMLEN 16 pointer masking
-    "pm16_rv64gc": ["pmmisaligned16"],
+    "pm16": ["pmmisaligned16"],
     # uncached AMO racing an I$ fill with wait states on the RAM
     **{f"ram_{r}_rv64gc": ["amoifill"] for r in ["1_0", "1_1", "2_0", "2_1"]},
 }

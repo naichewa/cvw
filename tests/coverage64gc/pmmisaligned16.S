@@ -6,9 +6,10 @@
 // Purpose: Misaligned accesses across the top of the widest virtual address range with PMLEN 16 pointer masking
 //          (Sv48, PMLEN 16; Sv57 is not supported with PMLEN 16).  Pointer masking applies to each byte of an
 //          access, so the byte after virtual address 0x00007FFFFFFFFFFF is at 0x0000800000000000 with bits 63:48
-//          ignored; bits 63:47 are then sign-extended copies of bit 47, giving 0xFFFF800000000000, the lowest
+//          ignored; bits 63:48 then become copies of bit 47, giving 0xFFFF800000000000, the lowest
 //          address of the negative half.  Each access below starts in the last page of the positive half and ends
-//          in the first page of the negative half, both mapped, so it must complete without a trap.  Without
+//          in the first page of the negative half.  When both pages are mapped the access must complete without
+//          a trap; when the second page is unmapped it must take a page fault with mtval = 0xFFFF800000000000.  Without
 //          pointer masking the same access spills into the non-canonical address 0x0000800000000000 and takes a
 //          page fault.
 //
@@ -158,6 +159,22 @@ main:
     STORE_OK "sd s1, 0(s0)", 0x5A5A7FFFFFFFFFFC, 0xE5F6071855667788, 0x99AABBCCA1B2C3D4, 0x30
     STORE_OK "sw s1, 0(s0)", 0x5A5A7FFFFFFFFFFE, 0x0718334455667788, 0x99AABBCCDDEEE5F6, 0x34
     STORE_OK "sh s1, 0(s0)", 0x5A5A7FFFFFFFFFFF, 0x1822334455667788, 0x99AABBCCDDEEFF07, 0x38
+
+    # Second half unmapped: the walk of the masked address 0xFFFF800000000000 finds an invalid PTE, so the access
+    # takes a page fault with mtval = 0xFFFF800000000000 (the start of the faulting portion, after masking)
+    la t0, bot1
+    sd zero, 0(t0)
+    sfence.vma
+    RUN "ld s1, 0(s0)", 0x5A5A7FFFFFFFFFFC
+    li t2, 13
+    SC_CHECK_EQ s8, t2, 0x3C
+    li t2, 0xFFFF800000000000
+    SC_CHECK_EQ s9, t2, 0x3D
+    RUN "sd s1, 0(s0)", 0x5A5A7FFFFFFFFFFC
+    li t2, 15
+    SC_CHECK_EQ s8, t2, 0x3E
+    li t2, 0xFFFF800000000000
+    SC_CHECK_EQ s9, t2, 0x3F
 
     # Without pointer masking the second half is the non-canonical address 0x0000800000000000
     li t0, 3
