@@ -31,6 +31,15 @@
   `CONNECT_CSR_WE(name, addr, testbench.dut.core.priv.priv.csr.unit.name``_REGW, testbench.dut.core.priv.priv.csr.unit.Write``name``M)
 
 // CSRs no instruction can write
+// The hypervisor CSRs do not yet have write enables here, so they are reported written when their
+// value changes, as all CSRs were before.
+`define CONNECT_CSR_CHG(name, addr, val) \
+  logic [P.XLEN-1:0] prev_csr_``name; \
+  always_ff @(posedge clk) \
+    prev_csr_``name <= rvvi.csr[0][0][addr]; \
+  assign rvvi.csr_wb[0][0][addr] = (rvvi.csr[0][0][addr] != prev_csr_``name); \
+  assign rvvi.csr[0][0][addr] = valid ? val : prev_csr_``name;
+
 `define CONNECT_CSR_RO(name, addr, val) \
   assign rvvi.csr[0][0][addr]    = val; \
   assign rvvi.csr_wb[0][0][addr] = 1'b0;
@@ -128,9 +137,11 @@ module wallyTracer import cvw::*; #(parameter cvw_t P) (rvviTrace rvvi);
     `CONNECT_CSR_WE(MSTATUS, 12'h300, testbench.dut.core.priv.priv.csr.csrm.MSTATUS_REGW, MSTATUSWriteM);
     `CONNECT_CSR(MEDELEG, 12'h302, csrm);
     `CONNECT_CSR(MIDELEG, 12'h303, csrm);
-    // sie and sip are mie and mip seen through mideleg, so a write to sie also writes mie
+    // sie and sip are mie and mip seen through mideleg, and hie and vsie are views of mie, so a write
+    // to any of them also writes mie
     `CONNECT_CSR_WE(MIE, 12'h304, testbench.dut.core.priv.priv.csr.csrm.MIE_REGW,
-                    testbench.dut.core.priv.priv.csr.csri.WriteMIEM | testbench.dut.core.priv.priv.csr.csri.WriteSIEM);
+                    testbench.dut.core.priv.priv.csr.csri.WriteMIEM | testbench.dut.core.priv.priv.csr.csri.WriteSIEM |
+                    testbench.dut.core.priv.priv.csr.csri.WriteHIEM | testbench.dut.core.priv.priv.csr.csri.WriteVSIEM);
     `CONNECT_CSR(MTVEC, 12'h305, csrm);
     `CONNECT_CSR(MSCRATCH, 12'h340, csrm);
     `CONNECT_CSR(MEPC, 12'h341, csrm);
@@ -258,6 +269,42 @@ module wallyTracer import cvw::*; #(parameter cvw_t P) (rvviTrace rvvi);
       `CONNECT_CSR_WE(STIMECMP, 12'h14D, testbench.dut.core.priv.priv.csr.csrs.csrs.STIMECMP_REGW[P.XLEN-1:0], testbench.dut.core.priv.priv.csr.csrs.csrs.WriteSTIMECMPM);
       if (P.XLEN == 32) begin
         `CONNECT_CSR_WE(STIMECMPH, 12'h15D, testbench.dut.core.priv.priv.csr.csrs.csrs.STIMECMP_REGW[63:32], testbench.dut.core.priv.priv.csr.csrs.csrs.WriteSTIMECMPHM);
+      end
+    end
+
+    if (P.H_SUPPORTED) begin
+      // Hypervisor and VS-visible CSRs used by lockstep and coverage.
+      `CONNECT_CSR_CHG(MTINST, 12'h34A, testbench.dut.core.priv.priv.csr.csrh.csrh.MTINST_REGW);
+      `CONNECT_CSR_CHG(MTVAL2, 12'h34B, testbench.dut.core.priv.priv.csr.csrh.csrh.MTVAL2_REGW);
+      `CONNECT_CSR_CHG(HSTATUS, 12'h600, testbench.dut.core.priv.priv.csr.csrh.csrh.HSTATUS_REGW);
+      `CONNECT_CSR_CHG(VSSTATUS, 12'h200, testbench.dut.core.priv.priv.csr.csrh.csrh.VSSTATUS_REGW);
+      `CONNECT_CSR_CHG(HEDELEG, 12'h602, testbench.dut.core.priv.priv.csr.csrh.csrh.HEDELEG_REGW);
+      `CONNECT_CSR_CHG(HIDELEG, 12'h603, {{(P.XLEN-16){1'b0}}, testbench.dut.core.priv.priv.csr.csrh.csrh.HIDELEG_REGW});
+      `CONNECT_CSR_CHG(HIE, 12'h604, {{(P.XLEN-16){1'b0}}, testbench.dut.core.priv.priv.csr.csrh.csrh.HIE_REGW});
+      `CONNECT_CSR_CHG(VSIE, 12'h204, testbench.dut.core.priv.priv.csr.csrh.csrh.VSIE_REGW);
+      `CONNECT_CSR_CHG(HTIMEDELTA, 12'h605, testbench.dut.core.priv.priv.csr.csrh.csrh.HTIMEDELTA_REGW[P.XLEN-1:0]);
+      `CONNECT_CSR_CHG(HCOUNTEREN, 12'h606, testbench.dut.core.priv.priv.csr.csrh.csrh.HCOUNTEREN_REGW);
+      `CONNECT_CSR_CHG(HGEIE, 12'h607, testbench.dut.core.priv.priv.csr.csrh.csrh.HGEIE_REGW);
+      `CONNECT_CSR_CHG(HENVCFG, 12'h60A, testbench.dut.core.priv.priv.csr.csrh.csrh.HENVCFG_REGW[P.XLEN-1:0]);
+      `CONNECT_CSR_CHG(HTVAL, 12'h643, testbench.dut.core.priv.priv.csr.csrh.csrh.HTVAL_REGW);
+      `CONNECT_CSR_CHG(HIP, 12'h644, {{(P.XLEN-16){1'b0}}, testbench.dut.core.priv.priv.csr.csrh.csrh.HIP_PENDING});
+      `CONNECT_CSR_CHG(HVIP, 12'h645, testbench.dut.core.priv.priv.csr.csrh.csrh.HVIP_REGW);
+      `CONNECT_CSR_CHG(HTINST, 12'h64A, testbench.dut.core.priv.priv.csr.csrh.csrh.HTINST_REGW);
+      `CONNECT_CSR_CHG(HGATP, 12'h680, testbench.dut.core.priv.priv.csr.csrh.csrh.HGATPReadVal);
+      `CONNECT_CSR_CHG(HGEIP, 12'hE12, testbench.dut.core.priv.priv.csr.csrh.csrh.HGEIP_REGW);
+      `CONNECT_CSR_CHG(VSTVEC, 12'h205, testbench.dut.core.priv.priv.csr.csrh.csrh.VSTVEC_REGW);
+      `CONNECT_CSR_CHG(VSSCRATCH, 12'h240, testbench.dut.core.priv.priv.csr.csrh.csrh.VSSCRATCH_REGW);
+      `CONNECT_CSR_CHG(VSEPC, 12'h241, testbench.dut.core.priv.priv.csr.csrh.csrh.VSEPC_REGW);
+      `CONNECT_CSR_CHG(VSCAUSE, 12'h242, testbench.dut.core.priv.priv.csr.csrh.csrh.VSCAUSE_REGW);
+      `CONNECT_CSR_CHG(VSTVAL, 12'h243, testbench.dut.core.priv.priv.csr.csrh.csrh.VSTVAL_REGW);
+      `CONNECT_CSR_CHG(VSIP, 12'h244, testbench.dut.core.priv.priv.csr.csrh.csrh.VSIP_REGW);
+      `CONNECT_CSR_CHG(VSATP, 12'h280, testbench.dut.core.priv.priv.csr.csrh.csrh.VSATP_REGW);
+      `CONNECT_CSR_CHG(VSTIMECMP, 12'h24D, testbench.dut.core.priv.priv.csr.csrh.csrh.VSTIMECMP_REGW[P.XLEN-1:0]);
+      if (P.XLEN == 32) begin
+        `CONNECT_CSR_CHG(HEDELEGH, 12'h612, testbench.dut.core.priv.priv.csr.csrh.csrh.HEDELEG_REGW[63:32]);
+        `CONNECT_CSR_CHG(HTIMEDELTAH, 12'h615, testbench.dut.core.priv.priv.csr.csrh.csrh.HTIMEDELTA_REGW[63:32]);
+        `CONNECT_CSR_CHG(HENVCFGH, 12'h61A, testbench.dut.core.priv.priv.csr.csrh.csrh.HENVCFG_REGW[63:32]);
+        `CONNECT_CSR_CHG(VSTIMECMPH, 12'h25D, testbench.dut.core.priv.priv.csr.csrh.csrh.VSTIMECMP_REGW[63:32]);
       end
     end
 

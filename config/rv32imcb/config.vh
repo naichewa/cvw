@@ -85,6 +85,7 @@ localparam logic ZFBFMIN_SUPPORTED = 0; // BF16 converts, requires F
 // privilege modes
 localparam logic S_SUPPORTED = 0; // Supervisor mode
 localparam logic U_SUPPORTED = 1; // User mode
+localparam logic H_SUPPORTED = 0; // Hypervisor mode
 
 // Supervisor level extensions
 localparam logic SSTC_SUPPORTED = 0; // Supervisor-mode timer interrupts

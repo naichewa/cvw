@@ -1759,3 +1759,9 @@ FMA_LZA 0
 
 deriv syn_sram_rv64gc_lzc syn_sram_rv64gc
 FMA_LZA 0
+
+deriv rv32gch rv32gc
+H_SUPPORTED     1
+
+deriv rv64gch rv64gc
+H_SUPPORTED     1

@@ -234,6 +234,7 @@ typedef struct packed {
   int           PLIC_SPI_ID;
   int           PLIC_SDC_ID;
   int           PLIC_PWM_ID;
+  int           GEILEN;
 
   logic         BPRED_SUPPORTED;
   bpred_type_t  BPRED_TYPE;
@@ -310,6 +311,7 @@ typedef struct packed {
   logic         Q_SUPPORTED;
   logic         S_SUPPORTED;
   logic         U_SUPPORTED;
+  logic         H_SUPPORTED;
 
   // logarithm of XLEN, used for number of index bits to select
   int           LOG_XLEN;

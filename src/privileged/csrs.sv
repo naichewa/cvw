@@ -29,7 +29,7 @@ module csrs import cvw::*; #(parameter cvw_t P) (
   output logic [P.XLEN-1:0] SEPC_REGW,
   output logic [31:0]       SCOUNTEREN_REGW,
   output logic [P.XLEN-1:0] SATP_REGW,
-  input  logic [11:0]       MIP_REGW, MIE_REGW, MIDELEG_REGW,
+  input  logic [15:0]       MIP_REGW, MIE_REGW, MIDELEG_REGW,
   input  logic [63:0]       MTIME_CLINT,
   input  logic              STCE,
   output logic              WriteSSTATUSM,
@@ -61,7 +61,7 @@ module csrs import cvw::*; #(parameter cvw_t P) (
   localparam SSTATEEN2  = 12'h10E;
   localparam SSTATEEN3  = 12'h10F;
   // Constants
-  localparam SINT_MASK  = 12'h222; // supervisor interrupt fields: SEI, STI, SSI
+  localparam SINT_MASK  = 16'h0222; // supervisor interrupt fields: SEI, STI, SSI
   // scounteren can only be written for counters that are supported by Zicntr or Zihpm and are nonzero
   localparam COUNTEREN_MASK = (P.ZICNTR_SUPPORTED ? 32'h00000007 : 32'h0) |
                               (P.ZIHPM_SUPPORTED  ? (32'hFFFFFFFF >> (32 - P.COUNTERS)) : 32'h0);
@@ -174,8 +174,8 @@ module csrs import cvw::*; #(parameter cvw_t P) (
     case (CSRAdrM)
       SSTATUS:    CSRSReadValM = SSTATUS_REGW;
       STVEC:      CSRSReadValM = STVEC_REGW;
-      SIP:        CSRSReadValM = {{(P.XLEN-12){1'b0}}, MIP_REGW & SINT_MASK & MIDELEG_REGW}; // only read supervisor fields
-      SIE:        CSRSReadValM = {{(P.XLEN-12){1'b0}}, MIE_REGW & SINT_MASK & MIDELEG_REGW}; // only read supervisor fields
+      SIP:        CSRSReadValM = {{(P.XLEN-16){1'b0}}, MIP_REGW & SINT_MASK & MIDELEG_REGW}; // only read supervisor fields
+      SIE:        CSRSReadValM = {{(P.XLEN-16){1'b0}}, MIE_REGW & SINT_MASK & MIDELEG_REGW}; // only read supervisor fields
       SSCRATCH:   CSRSReadValM = SSCRATCH_REGW;
       SEPC:       CSRSReadValM = SEPC_REGW;
       SCAUSE:     CSRSReadValM = SCAUSE_REGW;

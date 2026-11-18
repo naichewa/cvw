@@ -16,12 +16,12 @@
 // SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
-module csrindextoaddr #(parameter TOTAL_CSRS = 36) (
+module csrindextoaddr #(parameter TOTAL_CSRS = 65) (
   input  logic [TOTAL_CSRS-1:0] CSRWen,
   output logic [11:0]           CSRAddr);
 
   // Address of CSRArray[i] as assigned in testbench/common/rvvitbwrapper.sv and the FPGA top levels
-  localparam logic [11:0] CSR_ADDR [36] = '{
+  localparam logic [11:0] CSR_ADDR [65] = '{
     12'h300, //  0 mstatus
     12'h310, //  1 mstatush
     12'h305, //  2 mtvec
@@ -57,7 +57,36 @@ module csrindextoaddr #(parameter TOTAL_CSRS = 36) (
     12'h14D, // 32 stimecmp
     12'h001, // 33 fflags
     12'h002, // 34 frm
-    12'h003  // 35 fcsr
+    12'h003, // 35 fcsr
+    12'h34B, // 36 mtval2
+    12'h600, // 37 hstatus
+    12'h200, // 38 vsstatus
+    12'h602, // 39 hedeleg
+    12'h612, // 40 hedelegh
+    12'h603, // 41 hideleg
+    12'h604, // 42 hie
+    12'h204, // 43 vsie
+    12'h605, // 44 htimedelta
+    12'h615, // 45 htimedeltah
+    12'h606, // 46 hcounteren
+    12'h607, // 47 hgeie
+    12'h60A, // 48 henvcfg
+    12'h61A, // 49 henvcfgh
+    12'h643, // 50 htval
+    12'h644, // 51 hip
+    12'h645, // 52 hvip
+    12'h64A, // 53 htinst
+    12'h680, // 54 hgatp
+    12'hE12, // 55 hgeip
+    12'h205, // 56 vstvec
+    12'h240, // 57 vsscratch
+    12'h241, // 58 vsepc
+    12'h242, // 59 vscause
+    12'h243, // 60 vstval
+    12'h244, // 61 vsip
+    12'h280, // 62 vsatp
+    12'h24D, // 63 vstimecmp
+    12'h25D  // 64 vstimecmph
   };
 
   if (TOTAL_CSRS > $size(CSR_ADDR)) begin : toomanycsrs

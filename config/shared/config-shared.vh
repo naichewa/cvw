@@ -19,6 +19,7 @@ localparam PA_BITS     = (XLEN==32 ? 32'd34 : 32'd56);
 localparam SVMODE_BITS = (XLEN==32 ? 32'd1  : 32'd4);
 localparam ASID_BASE   = (XLEN==32 ? 32'd22 : 32'd44);
 localparam ASID_BITS   = (XLEN==32 ? 32'd9  : 32'd16);
+localparam GEILEN      = H_SUPPORTED ? 32'd1 : 32'd0;
 
 // constants to check SATP_MODE against
 // defined in Table 4.3 of the privileged spec
@@ -41,7 +42,7 @@ localparam logic ZPM_SUPPORTED = (SMMPM_SUPPORTED | SSNPM_SUPPORTED | SMNPM_SUPP
 localparam logic MSECCFG_SUPPORTED = SMMPM_SUPPORTED; // | SMEPMP_SUPPORTED | ZKR_SUPPORTED | ZICFILP_SUPPORTED
 
 // Configure MISA based on supported extensions
-localparam MISA = {6'b0, 5'b0, U_SUPPORTED, 1'b0, S_SUPPORTED, 1'b0, Q_SUPPORTED, 3'b0, M_SUPPORTED, 3'b0, I_SUPPORTED, 2'b0,
+localparam MISA = {6'b0, 5'b0, U_SUPPORTED, 1'b0, S_SUPPORTED, 1'b0, Q_SUPPORTED, 3'b0, M_SUPPORTED, 3'b0, I_SUPPORTED, H_SUPPORTED, 1'b0,
                    F_SUPPORTED, E_SUPPORTED, D_SUPPORTED, C_SUPPORTED, B_SUPPORTED, A_SUPPORTED};
 
 // logarithm of XLEN, used for number of index bits to select
